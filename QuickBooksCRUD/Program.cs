@@ -13,9 +13,7 @@ namespace QuickBooksCRUD
         public static void Main(string[] args)
         {
             QuickBooks quickBooks = new QuickBooks();
-            //quickBooks.DoInvoiceAdd();
-            //quickBooks.DoItemAdd();
-            quickBooks.DoItemQuery();
+            quickBooks.DoInvoiceAdd();
         }
 
     }
