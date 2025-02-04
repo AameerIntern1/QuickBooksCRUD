@@ -14,8 +14,8 @@ namespace QuickBooksCRUD
         {
             QuickBooks quickBooks = new QuickBooks();
             //quickBooks.DoInvoiceAdd();
-            //quickBooks.DoItemAdd();
-            quickBooks.DoItemQuery();
+            quickBooks.DoItemAdd();
+            quickBooks.GetAccount();
         }
 
     }
