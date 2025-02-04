@@ -59,7 +59,6 @@ namespace QuickBooksCRUD
                 }
             }
         }
-
         void BuildInvoiceAddRq(IMsgSetRequest requestMsgSet)
         {
             IInvoiceAdd InvoiceAddRq = requestMsgSet.AppendInvoiceAddRq();
@@ -77,7 +76,6 @@ namespace QuickBooksCRUD
             ORInvoiceLineAdd3.InvoiceLineAdd.Quantity.SetValue(1);
             InvoiceAddRq.Memo.SetValue("Invoice for Aameer");
         }
-
         public void DoItemAdd()
         {
             bool sessionBegun = false;
@@ -124,15 +122,12 @@ namespace QuickBooksCRUD
                 }
             }
         }
-
-
-
         void BuildItemServiceAddRq(IMsgSetRequest requestMsgSet)
         {
             // Create a service item request
             IItemServiceAdd ItemServiceAddRq = requestMsgSet.AppendItemServiceAddRq();
 
-            ItemServiceAddRq.Name.SetValue("Product B");
+            ItemServiceAddRq.Name.SetValue("Product v");
             ItemServiceAddRq.IsActive.SetValue(true);
 
             ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.ORPrice.Price.SetValue(15.65);
@@ -140,7 +135,6 @@ namespace QuickBooksCRUD
             ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.AccountRef.ListID.SetValue("80000026-1738573710");
 
         }
-
         public void GetAccount()
         {
             QBSessionManager sessionManager = new QBSessionManager();
@@ -172,10 +166,10 @@ namespace QuickBooksCRUD
                     {
                         IAccountRet account = accountList.GetAt(i);
                         string name = account.Name.GetValue();
-                        string type = account.AccountType.ToString();
+                        string? type = Convert.ToString(account.AccountType.GetValue());
                         string listID = account.ListID != null ? account.ListID.GetValue() : "N/A";
 
-                        Console.WriteLine($"{name} | List ID: {listID} ");
+                        Console.WriteLine($"{name} | List ID: {listID} |  type:{type} ");
                     }
                 }
                 else
