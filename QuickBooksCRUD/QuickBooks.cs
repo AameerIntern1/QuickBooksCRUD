@@ -132,14 +132,11 @@ namespace QuickBooksCRUD
             // Create a service item request
             IItemServiceAdd ItemServiceAddRq = requestMsgSet.AppendItemServiceAddRq();
 
-            // Set Item Name
             ItemServiceAddRq.Name.SetValue("Product B");
             ItemServiceAddRq.IsActive.SetValue(true);
 
-            // ✅ Use ORSalesPurchase to define it as a SALES-ONLY service item
             ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.ORPrice.Price.SetValue(15.65);
 
-            // ✅ Assign the Income Account using the correct ListID
             ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.AccountRef.ListID.SetValue("80000026-1738573710");
 
         }
@@ -192,7 +189,6 @@ namespace QuickBooksCRUD
             }
             finally
             {
-                // Step 6: Close QuickBooks Session
                 sessionManager.EndSession();
                 sessionManager.CloseConnection();
             }
