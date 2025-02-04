@@ -76,6 +76,7 @@ namespace QuickBooksCRUD
             ORInvoiceLineAdd3.InvoiceLineAdd.Quantity.SetValue(1);
             InvoiceAddRq.Memo.SetValue("Invoice for Aameer");
         }
+
         public void DoItemAdd()
         {
             bool sessionBegun = false;
@@ -341,3 +342,4 @@ namespace QuickBooksCRUD
 
     }
 }
+
