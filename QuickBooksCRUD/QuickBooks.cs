@@ -127,7 +127,7 @@ namespace QuickBooksCRUD
             // Create a service item request
             IItemServiceAdd ItemServiceAddRq = requestMsgSet.AppendItemServiceAddRq();
 
-            ItemServiceAddRq.Name.SetValue("Product v");
+            ItemServiceAddRq.Name.SetValue("Product 1");
             ItemServiceAddRq.IsActive.SetValue(true);
 
             ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.ORPrice.Price.SetValue(15.65);
@@ -165,7 +165,7 @@ namespace QuickBooksCRUD
                     for (int i = 0; i < accountList.Count; i++)
                     {
                         IAccountRet account = accountList.GetAt(i);
-                        string name = account.Name.GetValue();
+                        string name = account.FullName.GetValue();
                         string? type = Convert.ToString(account.AccountType.GetValue());
                         string listID = account.ListID != null ? account.ListID.GetValue() : "N/A";
 
@@ -187,5 +187,157 @@ namespace QuickBooksCRUD
                 sessionManager.CloseConnection();
             }
         }
+        public void GetItems()
+        {
+            QBSessionManager sessionManager = new QBSessionManager();
+
+            try
+            {
+                // Step 1: Open QuickBooks Session
+                sessionManager.OpenConnection("", "QuickBooks Item Fetcher");
+                sessionManager.BeginSession("", ENOpenMode.omDontCare);
+
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); // QBSDK 16.0
+                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+
+                IItemQuery itemQuery = requestSet.AppendItemQueryRq();
+
+                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+
+                IResponse response = responseSet.ResponseList.GetAt(0);
+                if (response.StatusCode == 0 && response.Detail != null)
+                {
+                    IORItemRetList itemList = (IORItemRetList)response.Detail;
+
+                    Console.WriteLine("Items in QuickBooks:");
+                    for (int i = 0; i < itemList.Count; i++)
+                    {
+                        string? listID = (string)itemList.GetAt(i).ItemServiceRet.ListID.GetValue();
+                        string name = (string)itemList.GetAt(i).ItemServiceRet.Name.GetValue();
+                        string type = Convert.ToString(itemList.GetAt(i).ItemServiceRet.Type.GetValue()); 
+                        Console.WriteLine($"{name} | List ID: {listID}  | Type:  {type}");
+                    }
+                }
+                else
+                {
+
+                
+                    Console.WriteLine("No items found or error: " + response.StatusMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+            }
+            finally
+            {
+                sessionManager.EndSession();
+                sessionManager.CloseConnection();
+            }
+        }
+        public void GetInvoices()
+        {
+            QBSessionManager sessionManager = new QBSessionManager();
+
+            try
+            {
+                // Step 1: Open QuickBooks Session
+                sessionManager.OpenConnection("", "QuickBooks Invoice Fetcher");
+                sessionManager.BeginSession("", ENOpenMode.omDontCare);
+
+                // Step 2: Create Request for Invoice Query
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); // QBSDK 16.0
+                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+
+                // Step 3: Append Invoice Query Request
+                IInvoiceQuery invoiceQuery = requestSet.AppendInvoiceQueryRq();
+
+                // Step 4: Send Request to QuickBooks
+                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+
+                // Step 5: Process Response
+                IResponse response = responseSet.ResponseList.GetAt(0);
+                if (response.StatusCode == 0 && response.Detail != null)
+                {
+                    IInvoiceRetList invoiceList = (IInvoiceRetList)response.Detail;
+
+                    Console.WriteLine("Invoices in QuickBooks:");
+                    for (int i = 0; i < invoiceList.Count; i++)
+                    {
+                        IInvoiceRet invoice = invoiceList.GetAt(i);
+                        string invoiceID = invoice.RefNumber.GetValue();
+                        string customerName = invoice.CustomerRef.FullName.GetValue();
+                        string balanceAmount = invoice.BalanceRemaining.GetValue().ToString();
+                        string totalAmount = invoice.Subtotal.GetValue().ToString();  
+
+                        Console.WriteLine($"Invoice ID: {invoiceID} | Customer: {customerName} | Balance Amount: {balanceAmount} | Paid Amount: {totalAmount}");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("No invoices found or error: " + response.StatusMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+            }
+            finally
+            {
+                sessionManager.EndSession();
+                sessionManager.CloseConnection();
+            }
+        }
+        public void GetCompanyInfo()
+        {
+            QBSessionManager sessionManager = new QBSessionManager();
+
+            try
+            {
+                sessionManager.OpenConnection("", "QuickBooks Company Info Fetcher");
+                sessionManager.BeginSession("", ENOpenMode.omDontCare);
+
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); 
+                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+
+                ICompanyQuery companyQuery = requestSet.AppendCompanyQueryRq();
+
+                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+
+                IResponse response = responseSet.ResponseList.GetAt(0);
+                if (response.StatusCode == 0 && response.Detail != null)
+                {
+                    ICompanyRet companyInfo = (ICompanyRet)response.Detail;
+
+                    Console.WriteLine("Company Information in QuickBooks:");
+                    string companyName = companyInfo.CompanyName.GetValue();
+                    string email = companyInfo.Email != null ? companyInfo.Email.GetValue() : "N/A";
+                    string address = companyInfo.Address != null ? companyInfo.Address.Addr1.GetValue() : "N/A";
+                    string city = companyInfo.Address != null ? companyInfo.Address.City.GetValue() : "N/A";
+                    string phone = companyInfo.Phone !=null ?companyInfo.Phone.GetValue(): "N/A";
+                    string fax = companyInfo.Fax != null ? companyInfo.Fax.GetValue() : "N/A";
+
+                    Console.WriteLine($"Company Name: {companyName}");
+                    Console.WriteLine($"Email: {email}");
+                    Console.WriteLine($"Address: {address}, {city}");
+                    Console.WriteLine($"Phone: {phone}");
+                    Console.WriteLine($"Fax: {fax}");
+                }
+                else
+                {
+                    Console.WriteLine("No company information found or error: " + response.StatusMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+            }
+            finally
+            {
+                sessionManager.EndSession();
+                sessionManager.CloseConnection();
+            }
+        }
+
     }
 }
