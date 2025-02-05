@@ -11,11 +11,13 @@ using System.Collections;
 using System.ComponentModel;
 using System.Data;
 using System.IO;
+using System.Diagnostics;
+using Newtonsoft.Json.Linq;
 namespace QuickBooksCRUD
 {
     public class QuickBooks
     {
-        public void DoInvoiceAdd()
+        public void DoInvoiceAdd(Dictionary<string, List<ItemModel>> data)
         {
             bool sessionBegun = false;
             bool connectionOpen = false;
@@ -30,17 +32,24 @@ namespace QuickBooksCRUD
                 IMsgSetRequest requestMsgSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
                 requestMsgSet.Attributes.OnError = ENRqOnError.roeContinue;
 
-                BuildInvoiceAddRq(requestMsgSet);
+                BuildInvoiceAddRq(requestMsgSet, data);
+                //BuildDepositAddRq(requestMsgSet);
 
                 //Connect to QuickBooks and begin a session
                 sessionManager.OpenConnection("", "Sample Code from OSR");
                 connectionOpen = true;
                 sessionManager.BeginSession("", ENOpenMode.omDontCare);
                 sessionBegun = true;
+                Stopwatch stopwatch = new Stopwatch();
 
-                //Send the request and get the response from QuickBooks
+
+                stopwatch.Start();
+                Console.WriteLine($"Time before add inovice in QuickBooks : {stopwatch.ElapsedMilliseconds} ms");
                 IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
-                //End the session and close the connection to QuickBooks
+                stopwatch.Stop();
+
+                // Display elapsed time
+                Console.WriteLine($"Time taken for add item in QuickBooks : {stopwatch.ElapsedMilliseconds} ms");
                 sessionManager.EndSession();
                 sessionBegun = false;
                 sessionManager.CloseConnection();
@@ -59,28 +68,59 @@ namespace QuickBooksCRUD
                 }
             }
         }
-        void BuildInvoiceAddRq(IMsgSetRequest requestMsgSet)
+        void BuildInvoiceAddRq(IMsgSetRequest requestMsgSet, Dictionary<string, List<ItemModel>> data)
         {
-            IInvoiceAdd InvoiceAddRq = requestMsgSet.AppendInvoiceAddRq();
+            Stopwatch stopwatch = new Stopwatch();
 
-            InvoiceAddRq.CustomerRef.FullName.SetValue("Aameer");
-            InvoiceAddRq.TxnDate.SetValue(DateTime.Now.AddDays(-1));
-            IORInvoiceLineAdd ORInvoiceLineAdd1 = InvoiceAddRq.ORInvoiceLineAddList.Append();
-            ORInvoiceLineAdd1.InvoiceLineAdd.ItemRef.FullName.SetValue("BHTowerRent");
-            ORInvoiceLineAdd1.InvoiceLineAdd.Quantity.SetValue(1);
-            IORInvoiceLineAdd ORInvoiceLineAdd2 = InvoiceAddRq.ORInvoiceLineAddList.Append();
-            ORInvoiceLineAdd2.InvoiceLineAdd.ItemRef.FullName.SetValue("SVC#118");
-            ORInvoiceLineAdd2.InvoiceLineAdd.Quantity.SetValue(1);
-            IORInvoiceLineAdd ORInvoiceLineAdd3 = InvoiceAddRq.ORInvoiceLineAddList.Append();
-            ORInvoiceLineAdd3.InvoiceLineAdd.ItemRef.FullName.SetValue("WiFiCredit");
-            ORInvoiceLineAdd3.InvoiceLineAdd.Quantity.SetValue(1);
-            InvoiceAddRq.Memo.SetValue("Invoice for Aameer");
+         
+            stopwatch.Start();
+            foreach (var category in data)
+            {
+
+                if (category.Key == "ProtectionPlan")
+                {
+                    int count=category.Value.Count;
+                    Console.WriteLine($"NO of item contain duplicate also : {count} ");
+                    foreach (var item in category.Value)
+                    {
+
+                        IInvoiceAdd InvoiceAddRq = requestMsgSet.AppendInvoiceAddRq();
+                        InvoiceAddRq.CustomerRef.FullName.SetValue("Aameer");
+
+                        InvoiceAddRq.TxnDate.SetValue(DateTime.Now);
+                        InvoiceAddRq.Memo.SetValue(item.Invoice);
+                        IORInvoiceLineAdd ORInvoiceLineAdd1 = InvoiceAddRq.ORInvoiceLineAddList.Append();
+                        ORInvoiceLineAdd1.InvoiceLineAdd.ItemRef.FullName.SetValue(item.Item);
+                        ORInvoiceLineAdd1.InvoiceLineAdd.Quantity.SetValue(1);
+                   
+
+                    }
+
+                }
+            }
+            stopwatch.Stop();
+
+            Console.WriteLine($"Time taken for add item in BuildInvoiceAddRq : {stopwatch.ElapsedMilliseconds} ms");
+
         }
-        public void DoItemAdd()
+        void BuildDepositAddRq(IMsgSetRequest requestMsgSet)
+        {
+            IDepositAdd DepositAddRq = requestMsgSet.AppendDepositAddRq();
+
+            DepositAddRq.DepositToAccountRef.FullName.SetValue("Checking Account");
+            DepositAddRq.TxnDate.SetValue(DateTime.Now);
+
+            IDepositLineAdd DepositLineAdd = DepositAddRq.DepositLineAddList.Append();
+            DepositLineAdd.ORDepositLineAdd.DepositInfo.AccountRef.ListID.SetValue("80000026-1738573710");
+            DepositLineAdd.ORDepositLineAdd.DepositInfo.Amount.SetValue(4030.00);
+            DepositLineAdd.ORDepositLineAdd.DepositInfo.Memo.SetValue("Service Revenue");
+
+        }
+        public void DoItemAdd(Dictionary<string, List<ItemModel>> data)
         {
             bool sessionBegun = false;
             bool connectionOpen = false;
-            QBSessionManager sessionManager = null;
+            QBSessionManager? sessionManager = null;
 
             try
             {
@@ -91,14 +131,13 @@ namespace QuickBooksCRUD
                 IMsgSetRequest requestMsgSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
                 requestMsgSet.Attributes.OnError = ENRqOnError.roeContinue;
 
-                BuildItemServiceAddRq(requestMsgSet);
+                BuildItemServiceAddRq(requestMsgSet, data);
 
                 //Connect to QuickBooks and begin a session
                 sessionManager.OpenConnection("", "Sample Code from OSR");
                 connectionOpen = true;
                 sessionManager.BeginSession("", ENOpenMode.omDontCare);
                 sessionBegun = true;
-
                 //Send the request and get the response from QuickBooks
                 IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
 
@@ -121,19 +160,39 @@ namespace QuickBooksCRUD
                     sessionManager?.CloseConnection();
                 }
             }
+            finally
+            {
+                sessionManager?.EndSession();
+                sessionManager?.CloseConnection();
+            }
         }
-        void BuildItemServiceAddRq(IMsgSetRequest requestMsgSet)
+        void BuildItemServiceAddRq(IMsgSetRequest requestMsgSet, Dictionary<string, List<ItemModel>> data)
         {
-            // Create a service item request
-            IItemServiceAdd ItemServiceAddRq = requestMsgSet.AppendItemServiceAddRq();
+           
+            foreach (var category in data)
+            {
+                if (category.Key == "Hardware")
+                {
+                    foreach (var item in category.Value)
+                    {
 
-            ItemServiceAddRq.Name.SetValue("Product 1");
-            ItemServiceAddRq.IsActive.SetValue(true);
+                        IItemServiceAdd ItemServiceAddRq = requestMsgSet.AppendItemServiceAddRq();
 
-            ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.ORPrice.Price.SetValue(15.65);
+                        ItemServiceAddRq.Name.SetValue(item.Item);
+                        ItemServiceAddRq.IsActive.SetValue(true);
 
-            ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.AccountRef.ListID.SetValue("80000026-1738573710");
+                        ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.ORPrice.Price.SetValue(item.Price);
+                        //ItemServiceAddRq.ClassRef.FullName.SetValue("Revenue:Residential revenue:Internet Services:Wireless Services:Cal.net:Fiber Service");
 
+                        //ItemServiceAddRq.ParentRef.FullName.SetValue("Fiber Service");
+                        ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.AccountRef.ListID.SetValue("80000033-1738573943");
+                        //ItemServiceAddRq.ORSalesPurchase.SalesOrPurchase.AccountRef.FullName.SetValue("Revenue:Residential revenue:Internet Services:Wireless Services:Cal.net");
+
+                    }
+
+                }
+              
+            }
         }
         public void GetAccount()
         {
@@ -214,14 +273,26 @@ namespace QuickBooksCRUD
                     {
                         string? listID = (string)itemList.GetAt(i).ItemServiceRet.ListID.GetValue();
                         string name = (string)itemList.GetAt(i).ItemServiceRet.Name.GetValue();
-                        string type = Convert.ToString(itemList.GetAt(i).ItemServiceRet.Type.GetValue()); 
-                        Console.WriteLine($"{name} | List ID: {listID}  | Type:  {type}");
+                        string type = Convert.ToString(itemList.GetAt(i).ItemServiceRet.Type.GetValue());
+                        string? list = null;
+                        string categoryListID = Convert.ToString(itemList.GetAt(i).ItemServiceRet.FullName.GetValue());
+                        var item = itemList.GetAt(i);
+                        if (item != null && item.ItemServiceRet != null && item.ItemServiceRet.ClassRef != null)
+                        {
+                            list = Convert.ToString(item.ItemServiceRet.ClassRef.ListID.GetValue());
+                        }
+                        else
+                        {
+                            Console.WriteLine("One of the objects in the chain is null.");
+                        }
+
+                        Console.WriteLine($"{name} | List ID: {listID}  | Type:  {type} id:{categoryListID}");
                     }
                 }
                 else
                 {
 
-                
+
                     Console.WriteLine("No items found or error: " + response.StatusMessage);
                 }
             }
@@ -268,7 +339,7 @@ namespace QuickBooksCRUD
                         string invoiceID = invoice.RefNumber.GetValue();
                         string customerName = invoice.CustomerRef.FullName.GetValue();
                         string balanceAmount = invoice.BalanceRemaining.GetValue().ToString();
-                        string totalAmount = invoice.Subtotal.GetValue().ToString();  
+                        string totalAmount = invoice.Subtotal.GetValue().ToString();
 
                         Console.WriteLine($"Invoice ID: {invoiceID} | Customer: {customerName} | Balance Amount: {balanceAmount} | Paid Amount: {totalAmount}");
                     }
@@ -297,7 +368,7 @@ namespace QuickBooksCRUD
                 sessionManager.OpenConnection("", "QuickBooks Company Info Fetcher");
                 sessionManager.BeginSession("", ENOpenMode.omDontCare);
 
-                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); 
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
                 requestSet.Attributes.OnError = ENRqOnError.roeContinue;
 
                 ICompanyQuery companyQuery = requestSet.AppendCompanyQueryRq();
@@ -314,7 +385,7 @@ namespace QuickBooksCRUD
                     string email = companyInfo.Email != null ? companyInfo.Email.GetValue() : "N/A";
                     string address = companyInfo.Address != null ? companyInfo.Address.Addr1.GetValue() : "N/A";
                     string city = companyInfo.Address != null ? companyInfo.Address.City.GetValue() : "N/A";
-                    string phone = companyInfo.Phone !=null ?companyInfo.Phone.GetValue(): "N/A";
+                    string phone = companyInfo.Phone != null ? companyInfo.Phone.GetValue() : "N/A";
                     string fax = companyInfo.Fax != null ? companyInfo.Fax.GetValue() : "N/A";
 
                     Console.WriteLine($"Company Name: {companyName}");
@@ -338,6 +409,224 @@ namespace QuickBooksCRUD
                 sessionManager.CloseConnection();
             }
         }
+        public void GetClasses2()
+        {
+            QBSessionManager sessionManager = new QBSessionManager();
+
+            try
+            {
+                // Step 1: Open QuickBooks Session
+                sessionManager.OpenConnection("", "QuickBooks Class Fetcher");
+                sessionManager.BeginSession("", ENOpenMode.omDontCare);
+
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); // QBSDK 16.0
+                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+
+                IClassQuery classQuery = requestSet.AppendClassQueryRq();  // Create Class Query Request
+
+                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+
+                //IResponse response = responseSet.ResponseList.GetAt(0);
+                IResponseList responseList = responseSet.ResponseList;
+                for (int i = 0; i < responseList.Count; i++)
+                {
+                    IResponse response = responseList.GetAt(i);
+                    //check the status code of the response, 0=ok, >0 is warning
+                    if (response.StatusCode >= 0)
+                    {
+                        //the request-specific response is in the details, make sure we have some
+                        if (response.Detail != null)
+                        {
+                            //make sure the response is the type we're expecting
+                            ENResponseType responseType = (ENResponseType)response.Type.GetValue();
+                            if (responseType == ENResponseType.rtClassQueryRs)
+                            {
+                                //upcast to more specific type here, this is safe because we checked with response.Type check above
+                                IClassRetList ClassRet = (IClassRetList)response.Detail;
+                                WalkClassRet(ClassRet);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+            }
+            finally
+            {
+                sessionManager.EndSession();
+                sessionManager.CloseConnection();
+            }
+        }
+
+        void WalkClassRet2(IClassRetList classList)
+        {
+            for (int i = 0; i < classList.Count; i++)
+            {
+                string? classID = (string)classList.GetAt(i).ListID.GetValue();
+                string className = (string)classList.GetAt(i).Name.GetValue();
+
+                Console.WriteLine($"{className} | Class ID: {classID}");
+            }
+        }
+        public void GetCategory()
+        {
+            QBSessionManager sessionManager = new QBSessionManager();
+
+            try
+            {
+                // Step 1: Open QuickBooks Session
+                sessionManager.OpenConnection("", "QuickBooks Category Fetcher");
+                sessionManager.BeginSession("", ENOpenMode.omDontCare);
+
+                // Step 2: Create Request
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); // QBSDK 16.0
+                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+
+                // Step 3: Append Item Query Request
+                IItemQuery itemQuery = requestSet.AppendItemQueryRq();
+
+                // Step 4: Send Request to QuickBooks
+                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+
+                // Step 5: Process Response
+                HashSet<string> categorySet = new HashSet<string>();
+
+                if (responseSet.ResponseList.Count > 0)
+                {
+                    IResponse response = responseSet.ResponseList.GetAt(0);
+                    if (response.StatusCode == 0 && response.Detail != null)
+                    {
+                        IORItemRetList itemList = (IORItemRetList)response.Detail;
+
+                        Console.WriteLine("Categories in QuickBooks:");
+                        for (int i = 0; i < itemList.Count; i++)
+                        {
+                            IORItemRet item = itemList.GetAt(i);
+
+                            // Extract category details (Parent Items)
+                            if (item.ItemServiceRet != null && item.ItemServiceRet.ListID != null)
+                            {
+                                string categoryName = item.ItemServiceRet.FullName.GetValue();
+                                string categoryListID = item.ItemServiceRet.ListID.GetValue();
+                                categorySet.Add($"{categoryName} | ListID: {categoryListID}");
+                            }
+                            else if (item.ItemInventoryRet != null && item.ItemInventoryRet.ListID != null)
+                            {
+                                string categoryName = item.ItemInventoryRet.FullName.GetValue();
+                                string categoryListID = item.ItemInventoryRet.ListID.GetValue();
+                                categorySet.Add($"{categoryName} | ListID: {categoryListID}");
+                            }
+                            else if (item.ItemNonInventoryRet != null && item.ItemNonInventoryRet.ListID != null)
+                            {
+                                string categoryName = item.ItemNonInventoryRet.FullName.GetValue();
+                                string categoryListID = item.ItemNonInventoryRet.ListID.GetValue();
+                                categorySet.Add($"{categoryName} | ListID: {categoryListID}");
+                            }
+                            else if (item.ItemOtherChargeRet != null && item.ItemOtherChargeRet.ListID != null)
+                            {
+                                string categoryName = item.ItemOtherChargeRet.FullName.GetValue();
+                                string categoryListID = item.ItemOtherChargeRet.ListID.GetValue();
+                                categorySet.Add($"{categoryName} | ListID: {categoryListID}");
+                            }
+                        }
+
+                        // Display unique categories
+                        foreach (var category in categorySet)
+                        {
+                            Console.WriteLine(category);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("No categories found or error: " + response.StatusMessage);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+            }
+            finally
+            {
+                sessionManager.EndSession();
+                sessionManager.CloseConnection();
+            }
+        }
+
+        public void GetClasses()
+        {
+            QBSessionManager sessionManager = new QBSessionManager();
+
+            try
+            {
+                // Step 1: Open QuickBooks Session
+                sessionManager.OpenConnection("", "QuickBooks Class Fetcher");
+                sessionManager.BeginSession("", ENOpenMode.omDontCare);
+
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); // QBSDK 16.0
+                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+
+                IClassQuery classQuery = requestSet.AppendClassQueryRq();  // Create Class Query Request
+
+                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+
+                IResponseList responseList = responseSet.ResponseList;
+                for (int i = 0; i < responseList.Count; i++)
+                {
+                    IResponse response = responseList.GetAt(i);
+                    // Check the status code of the response, 0=ok, >0 is warning
+                    if (response.StatusCode >= 0)
+                    {
+                        // Ensure the response type is correct
+                        ENResponseType responseType = (ENResponseType)response.Type.GetValue();
+                        if (responseType == ENResponseType.rtClassQueryRs)
+                        {
+                            IClassRetList classRetList = (IClassRetList)response.Detail;
+
+                            if (classRetList != null && classRetList.Count > 0)
+                            {
+                                WalkClassRet(classRetList);
+                            }
+                            else
+                            {
+                                Console.WriteLine("No classes found.");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Unexpected response type.");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Error: {response.StatusMessage}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+            }
+            finally
+            {
+                sessionManager.EndSession();
+                sessionManager.CloseConnection();
+            }
+        }
+
+        void WalkClassRet(IClassRetList classList)
+        {
+            for (int i = 0; i < classList.Count; i++)
+            {
+                string? classID = (string)classList.GetAt(i).ListID.GetValue();
+                string className = (string)classList.GetAt(i).Name.GetValue();
+
+                Console.WriteLine($"{className} | Class ID: {classID}");
+            }
+        }
+
 
     }
 }

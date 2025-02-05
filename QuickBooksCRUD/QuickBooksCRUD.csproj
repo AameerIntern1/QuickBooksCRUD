@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="Interop.QBFC16" Version="16.0.0.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="RabbitMQ.Client" Version="7.1.0-alpha.0" />
   </ItemGroup>
 
 </Project>
