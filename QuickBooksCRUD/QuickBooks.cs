@@ -77,12 +77,13 @@ namespace QuickBooksCRUD
             foreach (var category in data)
             {
 
-                if (category.Key == "ProtectionPlan")
+                if (category.Key == "Hardware")
                 {
                     int count=category.Value.Count;
                     Console.WriteLine($"NO of item contain duplicate also : {count} ");
                     foreach (var item in category.Value)
                     {
+                        Console.WriteLine(item.Item +  "  " + item.Price);
 
                         IInvoiceAdd InvoiceAddRq = requestMsgSet.AppendInvoiceAddRq();
                         InvoiceAddRq.CustomerRef.FullName.SetValue("Aameer");
@@ -175,6 +176,7 @@ namespace QuickBooksCRUD
                 {
                     foreach (var item in category.Value)
                     {
+                        Console.WriteLine(item.Item + item.Price);
 
                         IItemServiceAdd ItemServiceAddRq = requestMsgSet.AppendItemServiceAddRq();
 
