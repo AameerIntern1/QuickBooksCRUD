@@ -25,10 +25,8 @@ namespace QuickBooksCRUD
 
             try
             {
-                //Create the session Manager object
                 sessionManager = new QBSessionManager();
 
-                //Create the message set request object to hold our request
                 IMsgSetRequest requestMsgSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
                 requestMsgSet.Attributes.OnError = ENRqOnError.roeContinue;
 
@@ -58,10 +56,6 @@ namespace QuickBooksCRUD
                             if (response.StatusCode == 0) 
                             {
                                 Console.WriteLine("Invoice added successfully in QuickBooks.");
-                            }
-                            else
-                            {
-                                Console.WriteLine($"Error: {response.StatusMessage} (Code: {response.StatusCode})");
                             }
                         }
                     }
@@ -106,20 +100,20 @@ namespace QuickBooksCRUD
                         if (item.Price < 0) 
                         {
                             ICreditMemoAdd CreditMemoAddRq = requestMsgSet.AppendCreditMemoAddRq();
-                            CreditMemoAddRq.CustomerRef.FullName.SetValue("Aameer");
+                            CreditMemoAddRq.CustomerRef.FullName.SetValue("Test1");
                             CreditMemoAddRq.Memo.SetValue(item.Invoice);
                             IORCreditMemoLineAdd ORCreditMemoLineAdd1 = CreditMemoAddRq.ORCreditMemoLineAddList.Append();
                             ORCreditMemoLineAdd1.CreditMemoLineAdd.ItemRef.FullName.SetValue(item.Item);
                             ORCreditMemoLineAdd1.CreditMemoLineAdd.Quantity.SetValue(1);
-                            ORCreditMemoLineAdd1.CreditMemoLineAdd.ServiceDate.SetValue(DateTime.UtcNow.AddDays(-3));
+                            ORCreditMemoLineAdd1.CreditMemoLineAdd.ServiceDate.SetValue(DateTime.UtcNow.AddDays(-1));
                             ORCreditMemoLineAdd1.CreditMemoLineAdd.Amount.SetValue(Math.Abs(item.Price)); 
                         }
                         else 
                         {
                             IInvoiceAdd InvoiceAddRq = requestMsgSet.AppendInvoiceAddRq();
-                            InvoiceAddRq.CustomerRef.FullName.SetValue("Aameer");
+                            InvoiceAddRq.CustomerRef.FullName.SetValue("Test1");
 
-                            InvoiceAddRq.TxnDate.SetValue(DateTime.UtcNow.AddDays(-3));
+                            InvoiceAddRq.TxnDate.SetValue(DateTime.UtcNow.AddDays(-1));
                             InvoiceAddRq.Memo.SetValue(item.Invoice);
 
                             IORInvoiceLineAdd ORInvoiceLineAdd1 = InvoiceAddRq.ORInvoiceLineAddList.Append();

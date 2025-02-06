@@ -48,26 +48,14 @@ namespace QuickBooksCRUD
 
                 try
                 {
-                    // Deserialize dynamically into a dictionary
                     var queueData = JsonConvert.DeserializeObject<Dictionary<string, List<ItemModel>>>(message);
-
 
                     if (queueData != null)
                     {
                         Console.WriteLine("Received data:");
                         Console.WriteLine($"No of data Received :{queueData.Count}");
 
-                        //foreach (var category in queueData)
-                        //{
-                        //    Console.WriteLine($"{category.Key}:");
-                        //    foreach (var item in category.Value)
-                        //    {
-                        //        Console.WriteLine($"  {item.Item}: {item.Price}");
-                        //    }
-                        //}
-
                         QuickBooks quickBooks = new QuickBooks();
-                        // You can process each category individually, for example:
                         quickBooks.DoInvoiceAdd(queueData);
 
                         Console.WriteLine("Press Enter To Exit..");
