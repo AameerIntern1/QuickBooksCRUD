@@ -55,6 +55,7 @@ namespace QuickBooksCRUD
                     if (queueData != null)
                     {
                         Console.WriteLine("Received data:");
+                        Console.WriteLine($"No of data Received :{queueData.Count}");
 
                         //foreach (var category in queueData)
                         //{
@@ -64,7 +65,6 @@ namespace QuickBooksCRUD
                         //        Console.WriteLine($"  {item.Item}: {item.Price}");
                         //    }
                         //}
-
 
                         QuickBooks quickBooks = new QuickBooks();
                         // You can process each category individually, for example:
@@ -85,7 +85,7 @@ namespace QuickBooksCRUD
                 Console.WriteLine(new string('*', 100));
             };
 
-            await channel.BasicConsumeAsync(queue: queueName, autoAck: false, consumer: consumer);
+            await channel.BasicConsumeAsync(queue: queueName, autoAck: true, consumer: consumer);
 
             // To keep the program running
             Console.ReadLine();

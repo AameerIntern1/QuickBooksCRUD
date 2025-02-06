@@ -47,6 +47,25 @@ namespace QuickBooksCRUD
                 Console.WriteLine($"Time before add inovice in QuickBooks : {stopwatch.ElapsedMilliseconds} ms");
                 IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
                 stopwatch.Stop();
+                if (responseMsgSet != null)
+                {
+                    IResponseList responseList = responseMsgSet.ResponseList;
+                    if (responseList != null)
+                    {
+                        for (int i = 0; i < responseList.Count; i++)
+                        {
+                            IResponse response = responseList.GetAt(i);
+                            if (response.StatusCode == 0) 
+                            {
+                                Console.WriteLine("Invoice added successfully in QuickBooks.");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Error: {response.StatusMessage} (Code: {response.StatusCode})");
+                            }
+                        }
+                    }
+                }
 
                 // Display elapsed time
                 Console.WriteLine($"Time taken for add item in QuickBooks : {stopwatch.ElapsedMilliseconds} ms");
@@ -77,24 +96,49 @@ namespace QuickBooksCRUD
             foreach (var category in data)
             {
 
-                if (category.Key == "Hardware")
+                Console.WriteLine(category.Key);
                 {
                     int count=category.Value.Count;
                     Console.WriteLine($"NO of item contain duplicate also : {count} ");
                     foreach (var item in category.Value)
                     {
-                        Console.WriteLine(item.Item +  "  " + item.Price);
+                        //Console.WriteLine(item.Item +  "  " + item.Price);
+                        if (item.Price < 0) 
+                        {
+                            ICreditMemoAdd CreditMemoAddRq = requestMsgSet.AppendCreditMemoAddRq();
+                            CreditMemoAddRq.CustomerRef.FullName.SetValue("Aameer");
+                            CreditMemoAddRq.Memo.SetValue(item.Invoice);
+                            IORCreditMemoLineAdd ORCreditMemoLineAdd1 = CreditMemoAddRq.ORCreditMemoLineAddList.Append();
+                            ORCreditMemoLineAdd1.CreditMemoLineAdd.ItemRef.FullName.SetValue(item.Item);
+                            ORCreditMemoLineAdd1.CreditMemoLineAdd.Quantity.SetValue(1);
+                            ORCreditMemoLineAdd1.CreditMemoLineAdd.ServiceDate.SetValue(DateTime.UtcNow.AddDays(-3));
+                            ORCreditMemoLineAdd1.CreditMemoLineAdd.Amount.SetValue(Math.Abs(item.Price)); 
+                        }
+                        else 
+                        {
+                            IInvoiceAdd InvoiceAddRq = requestMsgSet.AppendInvoiceAddRq();
+                            InvoiceAddRq.CustomerRef.FullName.SetValue("Aameer");
 
-                        IInvoiceAdd InvoiceAddRq = requestMsgSet.AppendInvoiceAddRq();
-                        InvoiceAddRq.CustomerRef.FullName.SetValue("Aameer");
+                            InvoiceAddRq.TxnDate.SetValue(DateTime.UtcNow.AddDays(-3));
+                            InvoiceAddRq.Memo.SetValue(item.Invoice);
 
-                        InvoiceAddRq.TxnDate.SetValue(DateTime.Now);
-                        InvoiceAddRq.Memo.SetValue(item.Invoice);
-                        IORInvoiceLineAdd ORInvoiceLineAdd1 = InvoiceAddRq.ORInvoiceLineAddList.Append();
-                        ORInvoiceLineAdd1.InvoiceLineAdd.ItemRef.FullName.SetValue(item.Item);
-                        ORInvoiceLineAdd1.InvoiceLineAdd.Quantity.SetValue(1);
-                   
+                            IORInvoiceLineAdd ORInvoiceLineAdd1 = InvoiceAddRq.ORInvoiceLineAddList.Append();
+                            ORInvoiceLineAdd1.InvoiceLineAdd.ItemRef.FullName.SetValue(item.Item);
+                            ORInvoiceLineAdd1.InvoiceLineAdd.Quantity.SetValue(1);
+                            ORInvoiceLineAdd1.InvoiceLineAdd.Amount.SetValue(item.Price);
+                        }
 
+                        //IInvoiceAdd InvoiceAddRq = requestMsgSet.AppendInvoiceAddRq();
+                        //InvoiceAddRq.CustomerRef.FullName.SetValue("Aameer");
+                  
+                        //InvoiceAddRq.TxnDate.SetValue(DateTime.UtcNow.AddDays(-1));
+                        //InvoiceAddRq.Memo.SetValue(item.Invoice);
+                        //IORInvoiceLineAdd ORInvoiceLineAdd1 = InvoiceAddRq.ORInvoiceLineAddList.Append();
+                        //ORInvoiceLineAdd1.InvoiceLineAdd.ItemRef.FullName.SetValue(item.Item);
+                        //ORInvoiceLineAdd1.InvoiceLineAdd.Quantity.SetValue(1);
+                        //ORInvoiceLineAdd1.InvoiceLineAdd.Amount.SetValue(item.Price);
+                      
+                      
                     }
 
                 }
@@ -141,7 +185,7 @@ namespace QuickBooksCRUD
                 sessionBegun = true;
                 //Send the request and get the response from QuickBooks
                 IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
-
+             
                 //End the session and close the connection to QuickBooks
                 sessionManager.EndSession();
                 sessionBegun = false;
