@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "QuickBooksCRUD": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}

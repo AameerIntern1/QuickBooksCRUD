@@ -4,12 +4,63 @@ using RabbitMQ.Client.Events;
 using Newtonsoft.Json;
 using System.Text;
 using static System.Runtime.InteropServices.JavaScript.JSType;
+using Interop.QBFC16;
 
 namespace QuickBooksCRUD
 {
     public class Program
     {
-        public static async Task  Main(string[] args)
+
+
+        //static void Main(string[] args)
+        //{
+        //    try
+        //    {
+        //        // Create QBFC session manager
+        //        QBSessionManager qbSessionManager = new QBSessionManager();
+        //        qbSessionManager.OpenConnection("", "QuickBooks Invoice Sample");
+        //        qbSessionManager.BeginSession("", ENOpenMode.omDontCare);
+
+        //        // Create a new Invoice
+        //        IInvoiceAdd invoiceAdd = (IInvoiceAdd)qbSessionManager.CreateMsgSetRequest("US", 13, 0).AppendInvoiceAddRq();
+
+        //        // Set Customer Ref
+        //        ICustomerRef customerRef = invoiceAdd.CustomerRef;
+        //        customerRef.ListID.SetValue("1"); // Replace with your customer ListID
+
+        //        // Set the Invoice Date
+        //        invoiceAdd.TxnDate.SetValue(DateTime.Now.ToString("yyyy-MM-dd"));
+
+        //        // Add an item to the Invoice
+        //        IInvoiceLineAdd line = invoiceAdd.InvoiceLineAdd.Add();
+        //        IItemRef itemRef = line.ItemRef;
+        //        itemRef.ListID.SetValue("1"); // Replace with your item ListID
+        //        line.Quantity.SetValue(2);
+        //        line.Rate.SetValue(15.50); // Item price
+
+        //        // Add the Invoice to QuickBooks
+        //        IMsgSetResponse response = qbSessionManager.DoRequests(qbSessionManager.CreateMsgSetRequest("US", 13, 0));
+
+        //        // Check the response status
+        //        if (response.ResponseList.GetAt(0).StatusCode != 0)
+        //        {
+        //            Console.WriteLine("Error: " + response.ResponseList.GetAt(0).StatusMessage);
+        //        }
+        //        else
+        //        {
+        //            Console.WriteLine("Invoice created successfully!");
+        //        }
+
+        //        // End the session and close the connection
+        //        qbSessionManager.EndSession();
+        //        qbSessionManager.CloseConnection();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine("Error: " + ex.Message);
+        //    }
+        //}
+        public static async Task Main(string[] args)
         {
             QuickBooks quickBooks = new QuickBooks();
             //quickBooks.DoInvoiceAdd();
@@ -29,7 +80,7 @@ namespace QuickBooksCRUD
             var factory = new ConnectionFactory() { HostName = "localhost" };
             var connection = await factory.CreateConnectionAsync();
             var channel = await connection.CreateChannelAsync();
-            string queueName = "ItemQueue";
+            string queueName = "invoiceQueue";
 
             await channel.QueueDeclareAsync(
                 queue: queueName,
@@ -48,15 +99,24 @@ namespace QuickBooksCRUD
 
                 try
                 {
-                    var queueData = JsonConvert.DeserializeObject<Dictionary<string, List<ItemModel>>>(message);
+                    //var queueData = JsonConvert.DeserializeObject<Dictionary<string,decimal>>(message);
+                    //List<Categories>? queueData = JsonConvert.DeserializeObject<List<Categories>>(message);
 
+                    Dictionary<string, decimal>? queueData = JsonConvert.DeserializeObject<Dictionary<string, decimal>>(message);
+
+                  
                     if (queueData != null)
                     {
                         Console.WriteLine("Received data:");
                         Console.WriteLine($"No of data Received :{queueData.Count}");
 
                         QuickBooks quickBooks = new QuickBooks();
-                        quickBooks.DoInvoiceAdd(queueData);
+
+                        var list = quickBooks.GetInvoices1(queueData);
+                        quickBooks.DailyInvoiceAdd(queueData,list);
+                        //quickBooks.GetInvoices(queueData);
+
+
 
                         Console.WriteLine("Press Enter To Exit..");
                     }
@@ -73,7 +133,7 @@ namespace QuickBooksCRUD
                 Console.WriteLine(new string('*', 100));
             };
 
-            await channel.BasicConsumeAsync(queue: queueName, autoAck: true, consumer: consumer);
+            await channel.BasicConsumeAsync(queue: queueName, autoAck: false, consumer: consumer);
 
             // To keep the program running
             Console.ReadLine();

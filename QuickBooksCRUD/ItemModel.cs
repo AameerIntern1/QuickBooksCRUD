@@ -11,5 +11,8 @@ namespace QuickBooksCRUD
         public string? Invoice { get; set; }
         public string? Item { get; set; }
         public double Price { get; set; }
+        public DateTime? Date { get; set; }
+
     }
 }
+

@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<QuickBooksAccounts>
+	<ResidentialRevenue>
+		<InternetServices>
+			<WirelessServices>
+				<Cal.net>Revenue:Residential revenue:Internet Services:Wireless Services:Cal.net</Cal.net>
+				<Velocity>Revenue:Residential revenue:Internet Services:Wireless Services:Velocity</Velocity>
+			</WirelessServices>
+			<FiberServices>Revenue:Residential revenue:Internet Services:Fiber Services</FiberServices>
+			<ProtectionPlan>Revenue:Residential revenue:Internet Services:Protection Plan</ProtectionPlan>
+			<CALEA>Revenue:Residential revenue:Internet Services:CALEA</CALEA>
+			<GovernmentSupport>
+				<Federal>Revenue:Residential revenue:Internet Services:Government Support:Federal</Federal>
+				<StateAndLocal>Revenue:Residential revenue:Internet Services:Government Support:State and Local</StateAndLocal>
+			</GovernmentSupport>
+		</InternetServices>
+		<ApplicationServices>
+			<VoIP>Revenue:Residential revenue:Application Services:VoIP</VoIP>
+			<Television>Revenue:Residential revenue:Application Services:Television</Television>
+			<WebAndEmail>Revenue:Residential revenue:Application Services:Web &amp; Email</WebAndEmail>
+			<ManagedAccess>Revenue:Residential revenue:Application Services:Managed Access</ManagedAccess>
+		</ApplicationServices>
+		<LegacyServices>
+			<DialUp>Revenue:Residential revenue:Legacy Services:Dial-up</DialUp>
+			<DSL>Revenue:Residential revenue:Legacy Services:DSL</DSL>
+		</LegacyServices>
+		<InstallationAndRepair>Revenue:Residential revenue:Installation and Repair</InstallationAndRepair>
+		<HardwareSales>Revenue:Residential revenue:Hardware Sales</HardwareSales>
+		<OtherIncome>Revenue:Residential revenue:Other Income</OtherIncome>
+	</ResidentialRevenue>
+	<BusinessRevenue>
+		<InternetServices>
+			<WirelessServices>
+				<CalNet>Revenue:Business revenue:Internet Services:Wireless Services:Cal.net</CalNet>
+				<Velocity>Revenue:Business revenue:Internet Services:Wireless Services:Velocity</Velocity>
+			</WirelessServices>
+			<FiberServices>Revenue:Business revenue:Internet Services:Fiber Services</FiberServices>
+			<MultiTenant>Revenue:Business revenue:Internet Services:Multi-Tenant</MultiTenant>
+			<ProtectionPlan>Revenue:Business revenue:Internet Services:Protection Plan</ProtectionPlan>
+			<CALEA>Revenue:Business revenue:Internet Services:CALEA</CALEA>
+		</InternetServices>
+		<ApplicationServices>
+			<VoIP>Revenue:Business revenue:Application Services:VoIP</VoIP>
+			<Television>Revenue:Business revenue:Application Services:Television</Television>
+			<WebAndEmail>Revenue:Business revenue:Application Services:Web &amp; Email</WebAndEmail>
+			<ManagedAccess>Revenue:Business revenue:Application Services:Managed Access</ManagedAccess>
+		</ApplicationServices>
+		<LegacyServices>
+			<DialUp>Revenue:Business revenue:Legacy Services:Dial-up</DialUp>
+			<DSL>Revenue:Business revenue:Legacy Services:DSL</DSL>
+			<CoLocation>Revenue:Business revenue:Legacy Services:Co-Location</CoLocation>
+		</LegacyServices>
+		<InstallationAndRepair>Revenue:Business revenue:Installation and Repair</InstallationAndRepair>
+		<HardwareSales>Revenue:Business revenue:Hardware Sales</HardwareSales>
+		<OtherIncome>Revenue:Business revenue:Other Income</OtherIncome>
+	</BusinessRevenue>
+	<ContractedSpecialProjects>Revenue:Contracted Special Projects</ContractedSpecialProjects>
+	<ReturnsAndAllowances>Revenue:Returns and Allowances</ReturnsAndAllowances>
+</QuickBooksAccounts>
