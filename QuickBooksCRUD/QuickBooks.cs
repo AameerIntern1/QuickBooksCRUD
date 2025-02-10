@@ -19,6 +19,112 @@ namespace QuickBooksCRUD
 {
     public class QuickBooks
     {
+        public List<PreviousPrice> GetInvoices1(Dictionary<string, decimal> data)
+        {
+            QBSessionManager sessionManager = new QBSessionManager();
+            List<PreviousPrice> previousPrices = new List<PreviousPrice>();
+            //QBSessionManager sessionManager = new QBSessionManager();
+            //List<PreviousPrice> previousPrices = new List<PreviousPrice>();
+
+            try
+            {
+                sessionManager.OpenConnection("", "QuickBooks Invoice Fetcher");
+                sessionManager.BeginSession("", ENOpenMode.omDontCare);
+
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
+                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+                IInvoiceQuery invoiceQuery = requestSet.AppendInvoiceQueryRq();
+                //invoiceQuery.ORInvoiceQuery.TxnIDList.Add("652-1738924901");  // Example TxnID
+
+                invoiceQuery.ORInvoiceQuery.InvoiceFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.FromTxnDate.SetValue(DateTime.Parse("02/07/2025"));
+                invoiceQuery.ORInvoiceQuery.InvoiceFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.ToTxnDate.SetValue(DateTime.Parse("02/07/2025"));
+                invoiceQuery.ORInvoiceQuery.InvoiceFilter.EntityFilter.OREntityFilter.FullNameList.Add("Test");
+
+                invoiceQuery.IncludeLineItems.SetValue(true);
+
+                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+                string date = DateTime.Now.AddDays(-1).ToString("MM/yyyy");
+
+                // Step 5: Process Response
+                IResponse response = responseSet.ResponseList.GetAt(0);
+                if (response.StatusCode == 0 && response.Detail != null)
+                {
+                    IInvoiceRetList invoiceList = (IInvoiceRetList)response.Detail;
+                    Console.WriteLine($"Invoices in QuickBooks {invoiceList.Count}:");
+                    int count = 0;
+
+                    for (int i = 0; i < invoiceList.Count; i++)
+                    {
+                        IInvoiceRet invoice = invoiceList.GetAt(i);
+                        Console.WriteLine($"Processing Invoice ID: {invoice.RefNumber.GetValue()}");
+
+                        string? memo = invoice.Memo != null ? Convert.ToString(invoice.Memo.GetValue()) : null;
+
+                        if (invoice.ORInvoiceLineRetList != null)
+                        {
+                            foreach (var category in data)
+                            {
+                                if (memo != null && memo == $"{date}-{category.Key}")
+                                {
+                                    count++;
+                                    decimal totalAmount = Convert.ToDecimal(invoice.Subtotal.GetValue());
+                                    DateTime txnDate = Convert.ToDateTime(invoice.TxnDate.GetValue());
+                                    string invoiceID = invoice.RefNumber.GetValue();
+                                    string txnID = invoice.TxnID.GetValue();
+                                    string editID = invoice.EditSequence.GetValue();
+                                    for (int j = 0; j < invoice.ORInvoiceLineRetList.Count; j++)
+                                    {
+                                        IORInvoiceLineRet lineItem = invoice.ORInvoiceLineRetList.GetAt(j);
+                                        if (lineItem.InvoiceLineRet != null && lineItem.InvoiceLineRet.ItemRef != null)
+                                        {
+                                            string itemName = lineItem.InvoiceLineRet.ItemRef.FullName.GetValue();
+                                            decimal itemPrice = lineItem.InvoiceLineRet.Amount != null ? Convert.ToDecimal(lineItem.InvoiceLineRet.Amount.GetValue()) : 0;
+                                            string txnLineId = lineItem.InvoiceLineRet.TxnLineID.GetValue();
+                                            Console.WriteLine($"Item Name: {itemName}, Price: {itemPrice}");
+
+                                            previousPrices.Add(new PreviousPrice
+                                            {
+                                                Id = invoiceID,
+                                                TaxId = txnID,
+                                                TxnLineId = txnLineId,
+                                                Item = itemName,
+                                                OldPrice = itemPrice,
+                                                NewPrice = category.Value,
+                                                EditSequenceID = editID,
+                                                TxnDate = txnDate
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("No line items found.");
+                        }
+                    }
+
+                    Console.WriteLine($"After Validation {count}:");
+                }
+                else
+                {
+                    Console.WriteLine("No invoices found or error: " + response.StatusMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+            }
+            finally
+            {
+                sessionManager.EndSession();
+                sessionManager.CloseConnection();
+            }
+
+
+            return previousPrices;
+        }
+
         public void DailyInvoiceAdd(Dictionary<string, decimal> data, List<PreviousPrice> previousPrices)
         {
             //, Dictionary<string, decimal> invoiceData
@@ -95,28 +201,33 @@ namespace QuickBooksCRUD
 
             string date = DateTime.Now.AddDays(-1).ToString("MM/yyyy");
 
+            foreach (var mod in previousPrices)
+            {
+                Console.WriteLine($"Modifying Invoice - TxnID: {mod.TaxId}, EditSequence: {mod.EditSequenceID}, Item: {mod.Item}, Old Price: {mod.OldPrice}, New Price: {mod.NewPrice}");
+            }
 
             foreach (var mod in previousPrices)
             {
-                double amount = Convert.ToDouble(mod?.OldPrice.Value + mod?.NewPrice.Value);
+                double amount = Convert.ToDouble(mod?.OldPrice + mod?.NewPrice);
 
                 IInvoiceMod InvoiceModRq = requestMsgSet.AppendInvoiceModRq();
                 InvoiceModRq.CustomerRef.FullName.SetValue("Test");
                 // Setting the TxnID (Transaction ID) of the invoice to modify
-                InvoiceModRq.TxnID.SetValue(mod.Id);
-                InvoiceModRq.RefNumber.SetValue(mod.TaxId);
-                InvoiceModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
-                InvoiceModRq.EditSequence.SetValue(mod.EditSequenceID);
-                InvoiceModRq.Memo.SetValue($"{date}-{mod.Item}");
+                InvoiceModRq.TxnID.SetValue(mod?.TaxId);
+                //InvoiceModRq.RefNumber.SetValue(mod?.TaxId);
+                InvoiceModRq.TxnDate.SetValue(Convert.ToDateTime(mod?.TxnDate));
+                InvoiceModRq.EditSequence.SetValue(mod?.EditSequenceID);
+                InvoiceModRq.Memo.SetValue($"{date}-{mod?.Item}");
 
                 // Modifying an existing line item or adding a new one
                 IORInvoiceLineMod ORInvoiceLineMod1 = InvoiceModRq.ORInvoiceLineModList.Append();
-                ORInvoiceLineMod1.InvoiceLineMod.TxnLineID.SetValue(mod.TaxId);
-                ORInvoiceLineMod1.InvoiceLineMod.ItemRef.FullName.SetValue(mod.Item);
+                ORInvoiceLineMod1.InvoiceLineMod.TxnLineID.SetValue(mod?.TxnLineId);
+                ORInvoiceLineMod1.InvoiceLineMod.ItemRef.FullName.SetValue(mod?.Item);
+                //ORInvoiceLineMod1.InvoiceLineMod.OverrideUOMSetRef.FullName.SetValue(mod?.Item);
 
                 ORInvoiceLineMod1.InvoiceLineMod.Quantity.SetValue(1);
                 ORInvoiceLineMod1.InvoiceLineMod.Amount.SetValue(amount);
-                Console.WriteLine($"Txn id={mod.Id} EDitid={mod.EditSequenceID} item={mod.Item} refnumber={mod.TaxId} previous amount{mod.OldPrice} new amount{mod.NewPrice} total = {amount}");
+                Console.WriteLine($"Txn id={mod?.Id} EDitid={mod?.EditSequenceID} item={mod?.Item} refnumber={mod?.TaxId} previous amount{mod?.OldPrice} new amount{mod?.NewPrice} total = {amount}");
             }
 
 
@@ -478,238 +589,7 @@ namespace QuickBooksCRUD
                 sessionManager.CloseConnection();
             }
         }
-        public List<PreviousPrice> GetInvoices1(Dictionary<string, decimal> data)
-        {
-            QBSessionManager sessionManager = new QBSessionManager();
-            List<PreviousPrice> previousPrices = new List<PreviousPrice>();
-            //QBSessionManager sessionManager = new QBSessionManager();
-            //List<PreviousPrice> previousPrices = new List<PreviousPrice>();
-
-            try
-            {
-                sessionManager.OpenConnection("", "QuickBooks Invoice Fetcher");
-                sessionManager.BeginSession("", ENOpenMode.omDontCare);
-
-                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
-                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
-                IInvoiceQuery invoiceQuery = requestSet.AppendInvoiceQueryRq();
-                invoiceQuery.ORInvoiceQuery.InvoiceFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.FromTxnDate.SetValue(DateTime.Parse("02/07/2025"));
-                invoiceQuery.ORInvoiceQuery.InvoiceFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.ToTxnDate.SetValue(DateTime.Parse("02/07/2025"));
-                invoiceQuery.ORInvoiceQuery.InvoiceFilter.EntityFilter.OREntityFilter.FullNameList.Add("Test");
-
-                invoiceQuery.IncludeLineItems.SetValue(true);
-
-                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
-                string date = DateTime.Now.AddDays(-1).ToString("MM/yyyy");
-
-                // Step 5: Process Response
-                IResponse response = responseSet.ResponseList.GetAt(0);
-                if (response.StatusCode == 0 && response.Detail != null)
-                {
-                    IInvoiceRetList invoiceList = (IInvoiceRetList)response.Detail;
-                    Console.WriteLine($"Invoices in QuickBooks {invoiceList.Count}:");
-                    int count = 0;
-
-                    for (int i = 0; i < invoiceList.Count; i++)
-                    {
-                        IInvoiceRet invoice = invoiceList.GetAt(i);
-                        Console.WriteLine($"Processing Invoice ID: {invoice.RefNumber.GetValue()}");
-
-                        string? memo = invoice.Memo != null ? Convert.ToString(invoice.Memo.GetValue()) : null;
-
-                        if (invoice.ORInvoiceLineRetList != null)
-                        {
-                            foreach (var category in data)
-                            {
-                                if (memo != null && memo == $"{date}-{category.Key}")
-                                {
-                                    count++;
-                                    decimal totalAmount = Convert.ToDecimal(invoice.Subtotal.GetValue());
-                                    DateTime txnDate = Convert.ToDateTime(invoice.TxnDate.GetValue());
-                                    string invoiceID = invoice.TxnID.GetValue();
-                                    string txnID = invoice.RefNumber.GetValue();
-                                    string editID = invoice.EditSequence.GetValue();
-                                    for (int j = 0; j < invoice.ORInvoiceLineRetList.Count; j++)
-                                    {
-                                        IORInvoiceLineRet lineItem = invoice.ORInvoiceLineRetList.GetAt(j);
-                                        if (lineItem.InvoiceLineRet != null && lineItem.InvoiceLineRet.ItemRef != null)
-                                        {
-                                            string itemName = lineItem.InvoiceLineRet.ItemRef.FullName.GetValue();
-                                            decimal itemPrice = lineItem.InvoiceLineRet.Amount != null ? Convert.ToDecimal(lineItem.InvoiceLineRet.Amount.GetValue()) : 0;
-
-                                            Console.WriteLine($"Item Name: {itemName}, Price: {itemPrice}");
-
-                                            previousPrices.Add(new PreviousPrice
-                                            {
-                                                Id = invoiceID,
-                                                TaxId= txnID,
-                                                Item = itemName,
-                                                OldPrice = itemPrice,
-                                                NewPrice = category.Value,
-                                                EditSequenceID = editID,
-                                                TxnDate= txnDate
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("No line items found.");
-                        }
-                    }
-
-                    Console.WriteLine($"After Validation {count}:");
-                }
-                else
-                {
-                    Console.WriteLine("No invoices found or error: " + response.StatusMessage);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error: " + ex.Message);
-            }
-            finally
-            {
-                sessionManager.EndSession();
-                sessionManager.CloseConnection();
-            }
-
-            //try
-            //{
-            //    // Step 1: Open QuickBooks Session
-            //    sessionManager.OpenConnection("", "QuickBooks Invoice Fetcher");
-            //    sessionManager.BeginSession("", ENOpenMode.omDontCare);
-
-            //    // Step 2: Create Request for Invoice Query
-            //    IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); // QBSDK 16.0
-            //    requestSet.Attributes.OnError = ENRqOnError.roeContinue;
-            //    IInvoiceQuery invoiceQuery = requestSet.AppendInvoiceQueryRq();
-            //    invoiceQuery.ORInvoiceQuery.InvoiceFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.FromTxnDate.SetValue(DateTime.Parse("02/07/2025"));
-            //    invoiceQuery.ORInvoiceQuery.InvoiceFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.ToTxnDate.SetValue(DateTime.Parse("02/07/2025"));
-            //    invoiceQuery.ORInvoiceQuery.InvoiceFilter.EntityFilter.OREntityFilter.FullNameList.Add("Test");
-
-            //    invoiceQuery.IncludeLineItems.SetValue(true);
-
-            //    // Step 4: Send Request to QuickBooks
-            //    IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
-            //    string date = DateTime.Now.AddDays(-1).ToString("MM/yyyy");
-
-            //    // Step 5: Process Response
-            //    IResponse response = responseSet.ResponseList.GetAt(0);
-            //    if (response.StatusCode == 0 && response.Detail != null)
-            //    {
-            //        IInvoiceRetList invoiceList = (IInvoiceRetList)response.Detail;
-            //        Console.WriteLine($"Invoices in QuickBooks {invoiceList.Count}:");
-            //        int count = 0;
-            //        // Loop through the invoices
-            //        for (int i = 0; i < invoiceList.Count; i++)
-            //        {
-            //            IInvoiceRet invoice = invoiceList.GetAt(i);
-            //            Console.WriteLine(invoice);
-            //            string? memo = invoice.Memo != null ? Convert.ToString(invoice.Memo.GetValue()) : null;
-            //            Console.WriteLine($"Processing Invoice ID: {invoice.RefNumber.GetValue()}");
-            //            var list = invoice.ORInvoiceLineRetList;
-            //            if (invoice.ORInvoiceLineRetList != null)
-            //            {
-            //                foreach (var category in data)
-            //                {
-            //                    if (memo != null && memo == $"{date}-{category.Key}")
-            //                    {
-            //                        count++;
-            //                        decimal totalAmount = Convert.ToDecimal(invoice.Subtotal.GetValue());
-            //                        string txnDate = invoice.TxnDate.GetValue().ToString();
-            //                        string itemName;
-            //                        for (int j = 0; j < invoice.ORInvoiceLineRetList.Count; j++)
-            //                        {
-            //                            IORInvoiceLineRet lineItem = invoice.ORInvoiceLineRetList.GetAt(j);
-            //                            if (lineItem.InvoiceLineRet != null && lineItem.InvoiceLineRet.ItemRef != null)
-            //                            {
-            //                                 itemName = lineItem.InvoiceLineRet.ItemRef.FullName.GetValue();
-            //                                Console.WriteLine($"Item Name: {itemName}");
-            //                            }
-
-
-
-
-
-            //                        }
-
-            //                    }
-
-            //                }
-
-            //            }
-            //            else
-            //            {
-            //                Console.WriteLine("item does not exisist ");
-            //            }
-
-            //        }
-
-            //        Console.WriteLine($"After Validation {count}:");
-            //    }
-            //    else
-            //    {
-            //        Console.WriteLine("No invoices found or error: " + response.StatusMessage);
-            //    }
-            //    // Step 3: Append Invoice Query Request
-            //    //IInvoiceQuery invoiceQuery = requestSet.AppendInvoiceQueryRq();
-            //    //invoiceQuery.ORInvoiceQuery.InvoiceFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.FromTxnDate.SetValue(DateTime.Parse("02/07/2025"));
-            //    //invoiceQuery.ORInvoiceQuery.InvoiceFilter.EntityFilter.OREntityFilter.FullNameList.Add("Test1");
-
-            //    //// Step 4: Send Request to QuickBooks
-            //    //IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
-            //    //string date = DateTime.Now.AddDays(-1).ToString("MM/yyyy");
-
-            //    //// Step 5: Process Response
-            //    //IResponse response = responseSet.ResponseList.GetAt(0);
-            //    //if (response.StatusCode == 0 && response.Detail != null)
-            //    //{
-            //    //    IInvoiceRetList invoiceList = (IInvoiceRetList)response.Detail;
-            //    //    int count = 0;
-
-            //    //    for (int i = 0; i < invoiceList.Count; i++)
-            //    //    {
-            //    //        foreach (var category in data)
-            //    //        {
-            //    //            IInvoiceRet invoice = invoiceList.GetAt(i);
-            //    //            string? memo = invoice.Memo != null ? Convert.ToString(invoice.Memo.GetValue()) : null;
-            //    //            if (memo != null && memo == $"{date}-{category.Key}")
-            //    //            {
-            //    //                string invoiceID = invoice.RefNumber.GetValue();
-            //    //                decimal totalAmount = Convert.ToDecimal(invoice.Subtotal.GetValue());
-
-            //    //                // Add the invoice ID and total amount to the dictionary
-            //    //                invoices[invoiceID] = totalAmount;
-            //    //            }
-            //    //        }
-            //    //    }
-
-            //    //    Console.WriteLine($"Invoices in QuickBooks: {invoiceList.Count}");
-            //    //    Console.WriteLine($"Invoices matching criteria: {invoices.Count}");
-            //    //}
-            //    //else
-            //    //{
-            //    //    Console.WriteLine("No invoices found or error: " + response.StatusMessage);
-            //    //}
-            //}
-            //catch (Exception ex)
-            //{
-            //    Console.WriteLine("Exception: " + ex.Message);
-            //}
-            //finally
-            //{
-            //    sessionManager.EndSession();
-            //    sessionManager.CloseConnection();
-            //}
-
-            // Return the dictionary with invoice ID and total amount
-            return previousPrices;
-        }
-        public void GetInvoices(Dictionary<string, decimal> data)
+       public void GetInvoices(Dictionary<string, decimal> data)
         {
             QBSessionManager sessionManager = new QBSessionManager();
 
@@ -747,6 +627,7 @@ namespace QuickBooksCRUD
                         IInvoiceRet invoice = invoiceList.GetAt(i);
                         Console.WriteLine(invoice);
                         string? memo = invoice.Memo != null ? Convert.ToString(invoice.Memo.GetValue()) : null;
+                        Console.WriteLine($"Processing Invoice ID: {invoice.RefNumber.GetValue()}");
                         Console.WriteLine($"Processing Invoice ID: {invoice.RefNumber.GetValue()}");
                         var list = invoice.ORInvoiceLineRetList;
                         //Console.WriteLine($"class Invoice ID: {invoice.}");
@@ -814,77 +695,6 @@ namespace QuickBooksCRUD
             }
         }
 
-        //public void GetInvoices6(Dictionary<string, decimal> data)
-        //{
-        //    QBSessionManager sessionManager = new QBSessionManager();
-
-        //    try
-        //    {
-        //        // Step 1: Open QuickBooks Session
-        //        sessionManager.OpenConnection("", "QuickBooks Invoice Fetcher");
-        //        sessionManager.BeginSession("", ENOpenMode.omDontCare);
-
-        //        // Step 2: Create Request for Invoice Query
-        //        IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); // QBSDK 16.0
-        //        requestSet.Attributes.OnError = ENRqOnError.roeContinue;
-
-        //        // Step 3: Append Invoice Query Request
-        //        IInvoiceQuery invoiceQuery = requestSet.AppendInvoiceQueryRq();
-        //        invoiceQuery.ORInvoiceQuery.InvoiceFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.FromTxnDate.SetValue(DateTime.Parse("02/07/2025"));
-        //        invoiceQuery.ORInvoiceQuery.InvoiceFilter.EntityFilter.OREntityFilter.FullNameList.Add("Test1");
-
-        //        // Step 4: Send Request to QuickBooks
-        //        IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
-        //        string date = DateTime.Now.AddDays(-1).ToString("MM/yyyy");
-
-        //        // Step 5: Process Response
-        //        IResponse response = responseSet.ResponseList.GetAt(0);
-        //        if (response.StatusCode == 0 && response.Detail != null)
-        //        {
-        //            IInvoiceRetList invoiceList = (IInvoiceRetList)response.Detail;
-        //            Console.WriteLine($"Invoices in QuickBooks {invoiceList.Count}:");
-        //            int count = 0;
-
-        //            // Loop through the invoices
-        //            for (int i = 0; i < invoiceList.Count; i++)
-        //            {
-        //                IInvoiceRet invoice = invoiceList.GetAt(i);
-        //                string? memo = invoice.Memo != null ? Convert.ToString(invoice.Memo.GetValue()) : null;
-
-        //                foreach (var category in data)
-        //                {
-        //                    if (memo != null && memo == $"{date}-{category.Key}")
-        //                    {
-        //                        count++;
-        //                        string invoiceID = invoice.RefNumber.GetValue();
-        //                        string customerName = invoice.ClassRef.FullName.GetValue();
-        //                        string balanceAmount = invoice.BalanceRemaining.GetValue().ToString();
-        //                        decimal totalAmount = Convert.ToDecimal(invoice.Subtotal.GetValue());
-        //                        string txnDate = invoice.TxnDate.GetValue().ToString();
-        //                        Console.WriteLine($"Invoice ID: {invoiceID} | Customer: {customerName} | Balance Amount: {balanceAmount} | Paid Amount: {totalAmount} | Txn Date: {txnDate}");
-
-
-        //                    }
-        //                }
-        //            }
-
-        //            Console.WriteLine($"After Validation {count}:");
-        //        }
-        //        else
-        //        {
-        //            Console.WriteLine("No invoices found or error: " + response.StatusMessage);
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine("Exception: " + ex.Message);
-        //    }
-        //    finally
-        //    {
-        //        sessionManager.EndSession();
-        //        sessionManager.CloseConnection();
-        //    }
-        //}
 
         public void GetInvoices12(Dictionary<string, decimal> data)
         {

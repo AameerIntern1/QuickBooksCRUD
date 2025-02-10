@@ -10,6 +10,7 @@ namespace QuickBooksCRUD
     {
         public string? Id { get; set; }
         public string? TaxId { get; set; }
+        public string? TxnLineId { get; set; }
         public string? EditSequenceID { get; set; }
         public string? Item { get; set; }
         public decimal? OldPrice { get; set; }

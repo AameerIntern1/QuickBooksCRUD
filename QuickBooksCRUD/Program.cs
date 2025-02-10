@@ -113,6 +113,10 @@ namespace QuickBooksCRUD
                         QuickBooks quickBooks = new QuickBooks();
 
                         var list = quickBooks.GetInvoices1(queueData);
+                        foreach (var mod in list)
+                        {
+                            Console.WriteLine($"Modifying Invoice - TxnID: {mod.TaxId}, EditSequence: {mod.EditSequenceID}, Item: {mod.Item}, Old Price: {mod.OldPrice}, New Price: {mod.NewPrice}");
+                        }
                         quickBooks.DailyInvoiceAdd(queueData,list);
                         //quickBooks.GetInvoices(queueData);
 
