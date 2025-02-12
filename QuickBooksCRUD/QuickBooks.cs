@@ -226,7 +226,8 @@ namespace QuickBooksCRUD
                 requestMsgSet.Attributes.OnError = ENRqOnError.roeContinue;
 
                 IJournalEntryQuery journalQuery = requestMsgSet.AppendJournalEntryQueryRq();
-                journalQuery.TxnIDList.Add(txnId);
+                journalQuery.ORTxnQuery.TxnFilter.EntityFilter.OREntityFilter.ListIDList.Add(txnId);
+            
 
                 IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
                 IResponse response = responseMsgSet.ResponseList.GetAt(0);
