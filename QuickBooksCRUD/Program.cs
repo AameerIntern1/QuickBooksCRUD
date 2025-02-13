@@ -109,18 +109,21 @@ namespace QuickBooksCRUD
 
                     if (queueData != null)
                     {
-                        //foreach (var journal in queueData) {
-                        //    Console.WriteLine($"{journal.Key} ");
-                        //    foreach (var data in journal.Value)
-                        //    {
-                        //        Console.WriteLine($"{data.Account}  {data.EarnedAmount}  {data.UnEarnedAmount}  {data.AccountReceivable}  {data.Cash}");
-                        //    }
-                        //}
+                     
                         Console.WriteLine("Received data:");
                         Console.WriteLine($"No of data Received :{queueData.Count}");
 
                         QuickBooks quickBooks = new QuickBooks();
                         var accountList = quickBooks.GetJournal();
+                        foreach (var journal in accountList)
+                        {
+                            Console.WriteLine($"{journal.Key} ");
+                            foreach (var data in journal.Value)
+                            {
+                                Console.WriteLine($"{data.CreditAccount}  {data.DebitAccount}  {data.CreditPrice}  {data.DebitPrice}  {data.TaxId}");
+                            }
+                            Console.WriteLine("------------------------------------------------------------------------------------------");
+                        }
                         quickBooks.DailyJournalAdd(queueData, accountList);
                         //var list = quickBooks.GetInvoices1(queueData);
                         //foreach (var mod in list)
