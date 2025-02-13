@@ -102,13 +102,20 @@ namespace QuickBooksCRUD
                 try
                 {
                     //var queueData = JsonConvert.DeserializeObject<Dictionary<string,decimal>>(message);
-                    //List<Categories>? queueData = JsonConvert.DeserializeObject<List<Categories>>(message);
+                     Dictionary<string, List<Journal>>?  queueData = JsonConvert.DeserializeObject<Dictionary <string,List<Journal>>>(message);
 
-                    Dictionary<string, decimal>? queueData = JsonConvert.DeserializeObject<Dictionary<string, decimal>>(message);
+                    //Dictionary<string, decimal>? queueData = JsonConvert.DeserializeObject<Dictionary<string, decimal>>(message);
 
-                  
+
                     if (queueData != null)
                     {
+                        //foreach (var journal in queueData) {
+                        //    Console.WriteLine($"{journal.Key} ");
+                        //    foreach (var data in journal.Value)
+                        //    {
+                        //        Console.WriteLine($"{data.Account}  {data.EarnedAmount}  {data.UnEarnedAmount}  {data.AccountReceivable}  {data.Cash}");
+                        //    }
+                        //}
                         Console.WriteLine("Received data:");
                         Console.WriteLine($"No of data Received :{queueData.Count}");
 

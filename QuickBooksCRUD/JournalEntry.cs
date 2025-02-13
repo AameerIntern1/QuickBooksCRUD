@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace QuickBooksCRUD
 {
-    public class Journal
+    public class JournalEntry
     {
-        public string? Account { get; set; }
+       public string? Account { get; set; }
         public double? EarnedAmount { get; set; }
         public double? UnEarnedAmount { get; set; }
         public double? AccountReceivable { get; set; }
