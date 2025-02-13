@@ -155,14 +155,78 @@ namespace QuickBooksCRUD
         }
         private void AddJournalLine(IJournalEntryMod journalModRq, string accountName, double amount, QbPrice mod)
         {
-            if (amount == 0) return;
 
+            double finalAmount = 0.00;
+            string txnLine = string.Empty;
+            if (mod.DebitPrice != 0 && !string.IsNullOrEmpty(mod.DebitTxnLineId))
+            {
+                finalAmount = amount - Convert.ToDouble(mod.DebitPrice);
 
+                txnLine = mod.DebitTxnLineId;
+            }
+            if (mod.CreditPrice != 0 && !string.IsNullOrEmpty(mod.CreditTxnLineId))
+            {
+                finalAmount = amount - Convert.ToDouble(mod.CreditPrice);
+                txnLine = mod.CreditTxnLineId;
+
+            }
             IJournalLineMod line = journalModRq.JournalLineModList.Append();
             line.AccountRef.FullName.SetValue(accountName);
-            line.TxnLineID.SetValue(mod.CreditTxnLineId ?? mod.DebitTxnLineId);
-            line.Amount.SetValue(Math.Round(Math.Abs(amount), 2));
-            line.JournalLineType.SetValue(amount > 0 ? ENJournalLineType.jltCredit : ENJournalLineType.jltDebit);
+            line.TxnLineID.SetValue(txnLine);
+            Console.WriteLine($"\n\n\n\n Account Type{line.AccountRef.Type.GetValue()}\n\n\n\n\n");
+            line.Amount.SetValue(Math.Round(Math.Abs(finalAmount), 2));
+            line.JournalLineType.SetValue(finalAmount > 0 ? ENJournalLineType.jltCredit : ENJournalLineType.jltDebit);
+
+        }
+        private void AddAccountJournalLine(IJournalEntryMod journalModRq, string accountName, double amount, QbPrice mod)
+        {
+
+            double finalAmount = 0.00;
+            string txnLine = string.Empty;
+
+            if (mod.DebitPrice != 0 && !string.IsNullOrEmpty(mod.DebitTxnLineId))
+            {
+                finalAmount = amount - Convert.ToDouble(mod.DebitPrice);
+
+                txnLine = mod.DebitTxnLineId;
+            }
+            if (mod.CreditPrice != 0 && !string.IsNullOrEmpty(mod.CreditTxnLineId))
+            {
+                finalAmount = amount - Convert.ToDouble(mod.CreditPrice);
+                txnLine = mod.CreditTxnLineId;
+
+            }
+            IJournalLineMod line = journalModRq.JournalLineModList.Append();
+            line.AccountRef.FullName.SetValue(accountName);
+            line.TxnLineID.SetValue(txnLine);
+            //Console.WriteLine($"\n\n\n\n Account Type{line.AccountRef.Type.GetValue()}\n\n\n\n\n");
+            line.Amount.SetValue(Math.Round(Math.Abs(finalAmount), 2));
+            line.JournalLineType.SetValue(finalAmount > 0 ? ENJournalLineType.jltCredit : ENJournalLineType.jltDebit);
+
+        }
+        private void AddARCashJournalLine(IJournalEntryMod journalModRq, string accountName, double amount, QbPrice mod)
+        {
+
+            double finalAmount = 0.00;
+            string txnLine = string.Empty;
+            if (mod.DebitPrice != 0 && !string.IsNullOrEmpty(mod.DebitTxnLineId))
+            {
+                finalAmount = amount - Convert.ToDouble(mod.DebitPrice);
+
+                txnLine = mod.DebitTxnLineId;
+            }
+            if (mod.CreditPrice != 0 && !string.IsNullOrEmpty(mod.CreditTxnLineId))
+            {
+                finalAmount = amount - Convert.ToDouble(mod.CreditPrice);
+                txnLine = mod.CreditTxnLineId;
+
+            }
+            IJournalLineMod line = journalModRq.JournalLineModList.Append();
+            line.AccountRef.FullName.SetValue(accountName);
+            line.TxnLineID.SetValue(txnLine);
+            Console.WriteLine($"\n\n\n\n Account Type{line.AccountRef.Type.GetValue()}\n\n\n\n\n");
+            line.Amount.SetValue(Math.Round(Math.Abs(finalAmount), 2));
+            line.JournalLineType.SetValue(finalAmount < 0 ? ENJournalLineType.jltCredit : ENJournalLineType.jltDebit);
 
         }
         public void DailyJournalAdd(Dictionary<string, List<Journal>> queueData, List<QbPrice> previousPrices)
@@ -173,98 +237,87 @@ namespace QuickBooksCRUD
 
             try
             {
-
-
-                foreach (var mod in previousPrices)
+                foreach (var journal in queueData)
                 {
-
-                    string? txnLineId = mod.CreditTxnLineId != null ? mod.CreditTxnLineId : mod.DebitTxnLineId;
-                  //string  debitAccount = debitAccount.Contains(":") ? debitAccount.Split(':').Last().Replace(" ", "") : debitAccount;
-
-                    string? accountName = mod.CreditAccount != null ? mod.CreditAccount : mod.DebitAccount;
-                    string? account = accountName.Contains(":") ? accountName.Split(':').Last().Replace(" ", "") : accountName.Replace(" ", "");
-
-                    if (!string.IsNullOrEmpty(txnLineId))
+                    foreach (var mod in previousPrices)
                     {
-                        sessionManager = new QBSessionManager();
-                        IMsgSetRequest requestMsgSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
-                        requestMsgSet.Attributes.OnError = ENRqOnError.roeContinue;
+                        string? txnLineId = !string.IsNullOrEmpty(mod.CreditTxnLineId) ? mod.CreditTxnLineId : mod.DebitTxnLineId;
+                        //string  debitAccount = debitAccount.Contains(":") ? debitAccount.Split(':').Last().Replace(" ", "") : debitAccount;
 
-                        sessionManager.OpenConnection("", "Sample Code from OSR");
-                        connectionOpen = true;
-                        sessionManager.BeginSession("", ENOpenMode.omDontCare);
-                        sessionBegun = true;
+                        string? accountName = !string.IsNullOrEmpty(mod.CreditAccount) ? mod.CreditAccount : mod.DebitAccount;
+                        string? account = accountName.Contains(":") ? accountName.Split(':').Last().Replace(" ", "") : accountName.Replace(" ", "");
 
-                        //DailyBuildJournaleModRq(requestMsgSet, data, previousPrices, sessionManager);
-                        //ModifyJournalEntry(requestMsgSet, data, previousPrices, sessionManager);
-                        Stopwatch stopwatch = new Stopwatch();
-                        stopwatch.Start();
-
-                        if (mod == null) continue;
-
-                        //string currentEditSequence = GetLatestEditSequence(mod.TaxId, sessionManager);
-                        string currentEditSequence = mod.EditSequenceID;
-                        if (currentEditSequence == null)
+                        if (!string.IsNullOrEmpty(txnLineId))
                         {
-                            Console.WriteLine($"Skipping TxnID: {mod.TaxId}, no valid EditSequence found.");
-                            continue;
-                        }
+                            sessionManager = new QBSessionManager();
+                            IMsgSetRequest requestMsgSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
+                            requestMsgSet.Attributes.OnError = ENRqOnError.roeContinue;
 
-                        // Create a single modification request for all lines in this journal entry
-                        IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
-                        journalModRq.TxnID.SetValue(mod.TaxId);
-                        journalModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
-                        journalModRq.EditSequence.SetValue(currentEditSequence); // Use latest EditSequence
+                            sessionManager.OpenConnection("", "Sample Code from OSR");
+                            connectionOpen = true;
+                            sessionManager.BeginSession("", ENOpenMode.omDontCare);
+                            sessionBegun = true;
 
-                        foreach (var journal in queueData)
-                        {
-                            if (account == journal.Key )
+                            Stopwatch stopwatch = new Stopwatch();
+                            stopwatch.Start();
+
+                            if (mod == null) continue;
+
+
+                            IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
+                            journalModRq.TxnID.SetValue(mod.TaxId);
+                            journalModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
+                            journalModRq.EditSequence.SetValue(mod.EditSequenceID);
+                            if (account == journal.Key)
                             {
                                 Console.WriteLine($"-------------------------------------------------------------------Modifying only {mod.CreditAccount ?? mod.DebitAccount}");
                                 foreach (var data in journal.Value)
                                 {
                                     Console.WriteLine($"+++++++++++++ Acoount Name {accountName}");
-                                    AddJournalLine(journalModRq, accountName, Convert.ToDouble(data.EarnedAmount), mod);
-                                    AddJournalLine(journalModRq, "WireLess", Convert.ToDouble(data.UnEarnedAmount), mod);
-                                    AddJournalLine(journalModRq, "Accounts Receivable", Convert.ToDouble(data.AccountReceivable), mod);
-                                    AddJournalLine(journalModRq, "Checking", Convert.ToDouble(data.Cash), mod);
-                                 
+                                    AddAccountJournalLine(journalModRq, accountName, Convert.ToDouble(data.EarnedAmount), mod);
+                                    AddAccountJournalLine(journalModRq, "WireLess", Convert.ToDouble(data.UnEarnedAmount), mod);
+                                    AddARCashJournalLine(journalModRq, "Accounts Receivable", Convert.ToDouble(data.AccountReceivable), mod);
+                                    AddARCashJournalLine(journalModRq, "Checking", Convert.ToDouble(data.Cash), mod);
+
 
                                 }
-                            }
-                        }
-                        stopwatch.Stop();
-                        Console.WriteLine($"Total time for modifying journal entries: {stopwatch.ElapsedMilliseconds} ms");
+                                stopwatch.Stop();
+                                Console.WriteLine($"++++++++++++++++++++++++++++         [{mod.CreditAccount ?? mod.DebitAccount}]            = ====================================================");
+                                Console.WriteLine($"Total time for modifying journal entries: {stopwatch.ElapsedMilliseconds} ms");
+                                Stopwatch stopwatch2 = new Stopwatch();
+                                stopwatch2.Start();
 
-                        Stopwatch stopwatch2 = new Stopwatch();
-                        stopwatch2.Start();
+                                Console.WriteLine($"Time before adding journal entries in QuickBooks: {stopwatch2.ElapsedMilliseconds} ms");
+                                IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
+                                stopwatch2.Stop();
 
-                        Console.WriteLine($"Time before adding journal entries in QuickBooks: {stopwatch2.ElapsedMilliseconds} ms");
-                        IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
-                        stopwatch2.Stop();
-
-                        int successCount = 0, failureCount = 0;
-                        if (responseMsgSet?.ResponseList != null)
-                        {
-                            IResponseList responseList = responseMsgSet.ResponseList;
-                            for (int i = 0; i < responseList.Count; i++)
-                            {
-                                IResponse response = responseList.GetAt(i);
-
-                                if (response.StatusCode == 0)
-                                    successCount++;
-                                else
+                                int successCount = 0, failureCount = 0;
+                                if (responseMsgSet?.ResponseList != null)
                                 {
-                                    failureCount++;
-                                    Console.WriteLine($"Error occurred: {response.StatusMessage}");
+                                    IResponseList responseList = responseMsgSet.ResponseList;
+                                    for (int i = 0; i < responseList.Count; i++)
+                                    {
+                                        IResponse response = responseList.GetAt(i);
+
+                                        if (response.StatusCode == 0)
+                                            successCount++;
+                                        else
+                                        {
+                                            failureCount++;
+                                            Console.WriteLine($"Error occurred: {response.StatusMessage}");
+                                            Console.WriteLine($"Error occurred:--------------------------------------------------------- {response.StatusCode}");
+                                        }
+                                    }
+                                    Console.WriteLine($"{successCount} Journal Entries added successfully.");
+                                    Console.WriteLine($"Failed Journal Entries: {failureCount}");
+                                    Console.WriteLine($"Total processing time: {stopwatch.ElapsedMilliseconds} ms");
                                 }
+
                             }
-                            Console.WriteLine($"{successCount} Journal Entries added successfully.");
-                            Console.WriteLine($"Failed Journal Entries: {failureCount}");
-                            Console.WriteLine($"Total processing time: {stopwatch.ElapsedMilliseconds} ms");
                         }
 
-                  
+
+
                     }
                 }
 
@@ -378,268 +431,268 @@ namespace QuickBooksCRUD
             stopwatch.Stop();
             Console.WriteLine($"Total time for modifying journal entries: {stopwatch.ElapsedMilliseconds} ms");
         }
-  
 
 
 
 
 
-        private string GetLatestJournalEntry2(string txnId, QBSessionManager sessionManager)
-        {
-            try
-            {
-                // Create request message set
-                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
-                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
 
-                // Append journal entry query
-                IJournalEntryQuery journalEntryQuery = requestSet.AppendJournalEntryQueryRq();
-                journalEntryQuery.ORTxnQuery.TxnIDList.Add(txnId);
-                journalEntryQuery.IncludeLineItems.SetValue(true);
+        //private string GetLatestJournalEntry2(string txnId, QBSessionManager sessionManager)
+        //{
+        //    try
+        //    {
+        //        // Create request message set
+        //        IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
+        //        requestSet.Attributes.OnError = ENRqOnError.roeContinue;
 
-                // Send request to QuickBooks
-                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
-                IResponse response = responseSet.ResponseList.GetAt(0);
+        //        // Append journal entry query
+        //        IJournalEntryQuery journalEntryQuery = requestSet.AppendJournalEntryQueryRq();
+        //        journalEntryQuery.ORTxnQuery.TxnIDList.Add(txnId);
+        //        journalEntryQuery.IncludeLineItems.SetValue(true);
 
-                // Check response status
-                if (response.StatusCode != 0 || response.Detail == null)
-                {
-                    Console.WriteLine("Error fetching journal entry: " + response.StatusMessage);
-                    return null;
-                }
+        //        // Send request to QuickBooks
+        //        IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+        //        IResponse response = responseSet.ResponseList.GetAt(0);
 
-                // Ensure the response is a Journal Entry
-                if (response.Detail is IJournalEntryRet journalEntry)
-                {
-                    Console.WriteLine("Journal entry found.");
-                    return journalEntry.EditSequence.GetValue();
-                }
-                else
-                {
-                    Console.WriteLine("Unexpected response type.");
-                    return null;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching latest journal entry: {ex.Message}");
-                return null;
-            }
-        }
-        private string GetLatestJournalEntry(string txnId, QBSessionManager sessionManager)
-        {
-            try
-            {
-                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
-                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+        //        // Check response status
+        //        if (response.StatusCode != 0 || response.Detail == null)
+        //        {
+        //            Console.WriteLine("Error fetching journal entry: " + response.StatusMessage);
+        //            return null;
+        //        }
 
-                IJournalEntryQuery journalEntryQuery = requestSet.AppendJournalEntryQueryRq();
-                journalEntryQuery.ORTxnQuery.TxnIDList.Add(txnId);
-                journalEntryQuery.IncludeLineItems.SetValue(true);
+        //        // Ensure the response is a Journal Entry
+        //        if (response.Detail is IJournalEntryRet journalEntry)
+        //        {
+        //            Console.WriteLine("Journal entry found.");
+        //            return journalEntry.EditSequence.GetValue();
+        //        }
+        //        else
+        //        {
+        //            Console.WriteLine("Unexpected response type.");
+        //            return null;
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine($"Error fetching latest journal entry: {ex.Message}");
+        //        return null;
+        //    }
+        //}
+        //private string GetLatestJournalEntry(string txnId, QBSessionManager sessionManager)
+        //{
+        //    try
+        //    {
+        //        IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
+        //        requestSet.Attributes.OnError = ENRqOnError.roeContinue;
 
-                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
-                IResponse response = responseSet.ResponseList.GetAt(0);
+        //        IJournalEntryQuery journalEntryQuery = requestSet.AppendJournalEntryQueryRq();
+        //        journalEntryQuery.ORTxnQuery.TxnIDList.Add(txnId);
+        //        journalEntryQuery.IncludeLineItems.SetValue(true);
 
-                if (response.StatusCode == 0 && response.Detail != null)
-                {
-                    IJournalEntryRetList journalList = (IJournalEntryRetList)response.Detail;
-                    if (journalList.Count > 0)
-                    {
-                        IJournalEntryRet journal = journalList.GetAt(0);
-                        return journal.EditSequence.GetValue();  // Return latest EditSequence
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"Error fetching EditSequence: {response.StatusMessage}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Exception in GetLatestEditSequence: {ex.Message}");
-            }
-            return null;
-        }
+        //        IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+        //        IResponse response = responseSet.ResponseList.GetAt(0);
 
-        private string GetLatestJournalEntry1(string txnId, QBSessionManager sessionManager)
-        {
-            try
-            {
+        //        if (response.StatusCode == 0 && response.Detail != null)
+        //        {
+        //            IJournalEntryRetList journalList = (IJournalEntryRetList)response.Detail;
+        //            if (journalList.Count > 0)
+        //            {
+        //                IJournalEntryRet journal = journalList.GetAt(0);
+        //                return journal.EditSequence.GetValue();  // Return latest EditSequence
+        //            }
+        //        }
+        //        else
+        //        {
+        //            Console.WriteLine($"Error fetching EditSequence: {response.StatusMessage}");
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine($"Exception in GetLatestEditSequence: {ex.Message}");
+        //    }
+        //    return null;
+        //}
 
-                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
-                //sessionManager.OpenConnection("", "MyApp");
-                //sessionManager.EndSession();
-                //sessionManager.BeginSession("", ENOpenMode.omDontCare);
-                requestSet.Attributes.OnError = ENRqOnError.roeContinue;
-                IJournalEntryQuery journalEntryQuery = requestSet.AppendJournalEntryQueryRq();
-                journalEntryQuery.ORTxnQuery.TxnIDList.Add(txnId);
+        //private string GetLatestJournalEntry1(string txnId, QBSessionManager sessionManager)
+        //{
+        //    try
+        //    {
 
-                journalEntryQuery.IncludeLineItems.SetValue(true);
+        //        IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
+        //        //sessionManager.OpenConnection("", "MyApp");
+        //        //sessionManager.EndSession();
+        //        //sessionManager.BeginSession("", ENOpenMode.omDontCare);
+        //        requestSet.Attributes.OnError = ENRqOnError.roeContinue;
+        //        IJournalEntryQuery journalEntryQuery = requestSet.AppendJournalEntryQueryRq();
+        //        journalEntryQuery.ORTxnQuery.TxnIDList.Add(txnId);
 
-                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
-                string date = DateTime.Now.AddDays(-1).ToString("MM/yyyy");
+        //        journalEntryQuery.IncludeLineItems.SetValue(true);
 
-                IResponse response = responseSet.ResponseList.GetAt(0);
-                if (response.StatusCode == 0 && response.Detail != null)
-                {
-                    IJournalEntryRetList journalList = (IJournalEntryRetList)response.Detail;
-                    Console.WriteLine($"Invoices in QuickBooks {journalList.Count}:");
-                    int count = 0;
+        //        IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+        //        string date = DateTime.Now.AddDays(-1).ToString("MM/yyyy");
 
-                    for (int i = 0; i < journalList.Count; i++)
-                    {
-                        IJournalEntryRet journal = journalList.GetAt(i);
+        //        IResponse response = responseSet.ResponseList.GetAt(0);
+        //        if (response.StatusCode == 0 && response.Detail != null)
+        //        {
+        //            IJournalEntryRetList journalList = (IJournalEntryRetList)response.Detail;
+        //            Console.WriteLine($"Invoices in QuickBooks {journalList.Count}:");
+        //            int count = 0;
 
-                        string editID = journal.EditSequence.GetValue();
-                        if (!string.IsNullOrEmpty(editID))
-                        {
-                            return editID;
-                        }
-                        //if (response.Detail is IJournalEntryRet journalEntry)
-                        //{
-                        //    Console.WriteLine("Journal entry found.");
-                        //    return journalEntry.EditSequence.GetValue();
-                        //}
-                        else
-                        {
-                            Console.WriteLine("No line items found.");
-                            //return null;
-                        }
-                    }
+        //            for (int i = 0; i < journalList.Count; i++)
+        //            {
+        //                IJournalEntryRet journal = journalList.GetAt(i);
 
-                    Console.WriteLine($"After Validation {count}:");
-                    return null;
-                }
-                else
-                {
+        //                string editID = journal.EditSequence.GetValue();
+        //                if (!string.IsNullOrEmpty(editID))
+        //                {
+        //                    return editID;
+        //                }
+        //                //if (response.Detail is IJournalEntryRet journalEntry)
+        //                //{
+        //                //    Console.WriteLine("Journal entry found.");
+        //                //    return journalEntry.EditSequence.GetValue();
+        //                //}
+        //                else
+        //                {
+        //                    Console.WriteLine("No line items found.");
+        //                    //return null;
+        //                }
+        //            }
 
-                    Console.WriteLine("No invoices found or error: " + response.StatusMessage);
-                    return null;
-                }
+        //            Console.WriteLine($"After Validation {count}:");
+        //            return null;
+        //        }
+        //        else
+        //        {
 
-
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error: " + ex.Message);
-                return null;
-            }
-            //finally
-            //{
-            //    sessionManager.EndSession();
-            //    sessionManager.CloseConnection();
-
-            //}
-        }
-        private void DailyBuildJournaleModRq(IMsgSetRequest requestMsgSet, Dictionary<string, List<Journal>> queueData, List<QbPrice> previousPrices, QBSessionManager sessionManager)
-        {
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-
-            foreach (var mod in previousPrices)
-            {
-                if (mod == null) continue;
-
-                // Fetch the latest EditSequence immediately before modifying
-                string currentEditSequence = GetLatestJournalEntry(mod.TaxId, sessionManager);
-                if (currentEditSequence == null)
-                {
-                    Console.WriteLine($"Skipping TxnID: {mod.TaxId} as no valid EditSequence was found.");
-                    continue;
-                }
-
-                foreach (var journal in queueData)
-                {
-                    IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
-                    journalModRq.TxnID.SetValue(mod.TaxId);
-                    journalModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
-                    journalModRq.EditSequence.SetValue(currentEditSequence);
-
-                    foreach (var data in journal.Value)
-                    {
+        //            Console.WriteLine("No invoices found or error: " + response.StatusMessage);
+        //            return null;
+        //        }
 
 
-                        double earnedRevChange = Math.Round(Convert.ToDouble(data.EarnedAmount), 2);
-                        double deferredRevChange = Math.Round(Convert.ToDouble(data.UnEarnedAmount), 2);
-                        double arChange = Math.Round(Convert.ToDouble(data.AccountReceivable), 2);
-                        double cashChange = Math.Round(Convert.ToDouble(data.Cash), 2);
-                        string? txlineId = mod.CreditTxnLineId ?? mod.DebitTxnLineId;
-                        if (!string.IsNullOrEmpty(txlineId))
-                        {
-                            Console.WriteLine($"Updating TxnID: {mod.TaxId} with EditSequence: {currentEditSequence}");
-                            Console.WriteLine($"EarnedRevChange: {earnedRevChange}, DeferredRevChange: {deferredRevChange}, ARChange: {arChange}, CashChange: {cashChange}, TxnLineID: {txlineId}");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine("Error: " + ex.Message);
+        //        return null;
+        //    }
+        //    //finally
+        //    //{
+        //    //    sessionManager.EndSession();
+        //    //    sessionManager.CloseConnection();
 
-                            AddJournalLine(journalModRq, "Revenue:Residential revenue:Internet Services:CALEA", earnedRevChange, mod);
-                            AddJournalLine(journalModRq, "WireLess", deferredRevChange, mod);
-                            AddJournalLine(journalModRq, "Accounts Receivable", arChange, mod);
-                            AddJournalLine(journalModRq, "Checking", cashChange, mod);
-                        }
-                    }
-                }
-            }
+        //    //}
+        //}
+        //private void DailyBuildJournaleModRq(IMsgSetRequest requestMsgSet, Dictionary<string, List<Journal>> queueData, List<QbPrice> previousPrices, QBSessionManager sessionManager)
+        //{
+        //    Stopwatch stopwatch = new Stopwatch();
+        //    stopwatch.Start();
 
-            stopwatch.Stop();
-            Console.WriteLine($"Time taken for modifying journal entries: {stopwatch.ElapsedMilliseconds} ms");
-        }
+        //    foreach (var mod in previousPrices)
+        //    {
+        //        if (mod == null) continue;
 
-        private void DailyBuildJournaleModRq45(IMsgSetRequest requestMsgSet, Dictionary<string, List<Journal>> queueData, List<QbPrice> previousPrices, QBSessionManager sessionManager)
-        {
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
+        //        // Fetch the latest EditSequence immediately before modifying
+        //        string currentEditSequence = GetLatestJournalEntry(mod.TaxId, sessionManager);
+        //        if (currentEditSequence == null)
+        //        {
+        //            Console.WriteLine($"Skipping TxnID: {mod.TaxId} as no valid EditSequence was found.");
+        //            continue;
+        //        }
 
-            foreach (var mod in previousPrices)
-            {
-                if (mod == null) continue;
+        //        foreach (var journal in queueData)
+        //        {
+        //            IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
+        //            journalModRq.TxnID.SetValue(mod.TaxId);
+        //            journalModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
+        //            journalModRq.EditSequence.SetValue(currentEditSequence);
 
-                string? currentEditSequence = mod.EditSequenceID;
-                currentEditSequence = GetLatestJournalEntry(mod.TaxId, sessionManager);
-                if (currentEditSequence == null)
-                {
-                    continue;
-                };
+        //            foreach (var data in journal.Value)
+        //            {
 
-                foreach (var journal in queueData)
-                {
-                    foreach (var data in journal.Value)
-                    {
-                        IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
-                        journalModRq.TxnID.SetValue(mod.TaxId);
-                        journalModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
-                        journalModRq.EditSequence.SetValue(currentEditSequence); // Use latest EditSequence
 
-                        double earnedRevChange = Math.Round(Convert.ToDouble(data.EarnedAmount), 2);
-                        double deferredRevChange = Math.Round(Convert.ToDouble(data.UnEarnedAmount), 2);
-                        double arChange = Math.Round(Convert.ToDouble(data.AccountReceivable), 2);
-                        double cashChange = Math.Round(Convert.ToDouble(data.Cash), 2);
-                        string? txlineId = mod.CreditTxnLineId ?? mod.DebitTxnLineId;
+        //                double earnedRevChange = Math.Round(Convert.ToDouble(data.EarnedAmount), 2);
+        //                double deferredRevChange = Math.Round(Convert.ToDouble(data.UnEarnedAmount), 2);
+        //                double arChange = Math.Round(Convert.ToDouble(data.AccountReceivable), 2);
+        //                double cashChange = Math.Round(Convert.ToDouble(data.Cash), 2);
+        //                string? txlineId = mod.CreditTxnLineId ?? mod.DebitTxnLineId;
+        //                if (!string.IsNullOrEmpty(txlineId))
+        //                {
+        //                    Console.WriteLine($"Updating TxnID: {mod.TaxId} with EditSequence: {currentEditSequence}");
+        //                    Console.WriteLine($"EarnedRevChange: {earnedRevChange}, DeferredRevChange: {deferredRevChange}, ARChange: {arChange}, CashChange: {cashChange}, TxnLineID: {txlineId}");
 
-                        if (!string.IsNullOrEmpty(txlineId))
-                        {
-                            //Console.WriteLine($"EarnedRevChange: {earnedRevChange}, DeferredRevChange: {deferredRevChange}, ARChange: {arChange}, CashChange: {cashChange}, TxnLineID: {txlineId}");
+        //                    AddJournalLine(journalModRq, "Revenue:Residential revenue:Internet Services:CALEA", earnedRevChange, mod);
+        //                    AddJournalLine(journalModRq, "WireLess", deferredRevChange, mod);
+        //                    AddJournalLine(journalModRq, "Accounts Receivable", arChange, mod);
+        //                    AddJournalLine(journalModRq, "Checking", cashChange, mod);
+        //                }
+        //            }
+        //        }
+        //    }
 
-                            AddJournalLine(journalModRq, "Revenue:Residential revenue:Internet Services:CALEA", earnedRevChange, mod);
-                            AddJournalLine(journalModRq, "WireLess", deferredRevChange, mod);
-                            AddJournalLine(journalModRq, "Accounts Receivable", arChange, mod);
-                            AddJournalLine(journalModRq, "Checking", cashChange, mod);
-                        }
-                    }
-                }
-            }
+        //    stopwatch.Stop();
+        //    Console.WriteLine($"Time taken for modifying journal entries: {stopwatch.ElapsedMilliseconds} ms");
+        //}
 
-            stopwatch.Stop();
-            Console.WriteLine($"Time taken for modifying journal entries: {stopwatch.ElapsedMilliseconds} ms");
-        }
+        //private void DailyBuildJournaleModRq45(IMsgSetRequest requestMsgSet, Dictionary<string, List<Journal>> queueData, List<QbPrice> previousPrices, QBSessionManager sessionManager)
+        //{
+        //    Stopwatch stopwatch = new Stopwatch();
+        //    stopwatch.Start();
 
-        private void AddJournalLine100(IJournalEntryMod journalModRq, string accountName, double amount, QbPrice mod)
-        {
-            if (amount == 0) return;
+        //    foreach (var mod in previousPrices)
+        //    {
+        //        if (mod == null) continue;
 
-            IJournalLineMod line = journalModRq.JournalLineModList.Append();
-            line.AccountRef.FullName.SetValue(accountName);
-            line.TxnLineID.SetValue(mod.CreditTxnLineId ?? mod.DebitTxnLineId);
-            line.Amount.SetValue(Math.Abs(amount));
-            line.JournalLineType.SetValue(amount > 0 ? ENJournalLineType.jltCredit : ENJournalLineType.jltDebit);
-        }
+        //        string? currentEditSequence = mod.EditSequenceID;
+        //        currentEditSequence = GetLatestJournalEntry(mod.TaxId, sessionManager);
+        //        if (currentEditSequence == null)
+        //        {
+        //            continue;
+        //        };
+
+        //        foreach (var journal in queueData)
+        //        {
+        //            foreach (var data in journal.Value)
+        //            {
+        //                IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
+        //                journalModRq.TxnID.SetValue(mod.TaxId);
+        //                journalModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
+        //                journalModRq.EditSequence.SetValue(currentEditSequence); // Use latest EditSequence
+
+        //                double earnedRevChange = Math.Round(Convert.ToDouble(data.EarnedAmount), 2);
+        //                double deferredRevChange = Math.Round(Convert.ToDouble(data.UnEarnedAmount), 2);
+        //                double arChange = Math.Round(Convert.ToDouble(data.AccountReceivable), 2);
+        //                double cashChange = Math.Round(Convert.ToDouble(data.Cash), 2);
+        //                string? txlineId = mod.CreditTxnLineId ?? mod.DebitTxnLineId;
+
+        //                if (!string.IsNullOrEmpty(txlineId))
+        //                {
+        //                    //Console.WriteLine($"EarnedRevChange: {earnedRevChange}, DeferredRevChange: {deferredRevChange}, ARChange: {arChange}, CashChange: {cashChange}, TxnLineID: {txlineId}");
+
+        //                    AddJournalLine(journalModRq, "Revenue:Residential revenue:Internet Services:CALEA", earnedRevChange, mod);
+        //                    AddJournalLine(journalModRq, "WireLess", deferredRevChange, mod);
+        //                    AddJournalLine(journalModRq, "Accounts Receivable", arChange, mod);
+        //                    AddJournalLine(journalModRq, "Checking", cashChange, mod);
+        //                }
+        //            }
+        //        }
+        //    }
+
+        //    stopwatch.Stop();
+        //    Console.WriteLine($"Time taken for modifying journal entries: {stopwatch.ElapsedMilliseconds} ms");
+        //}
+
+        //private void AddJournalLine100(IJournalEntryMod journalModRq, string accountName, double amount, QbPrice mod)
+        //{
+        //    if (amount == 0) return;
+
+        //    IJournalLineMod line = journalModRq.JournalLineModList.Append();
+        //    line.AccountRef.FullName.SetValue(accountName);
+        //    line.TxnLineID.SetValue(mod.CreditTxnLineId ?? mod.DebitTxnLineId);
+        //    line.Amount.SetValue(Math.Abs(amount));
+        //    line.JournalLineType.SetValue(amount > 0 ? ENJournalLineType.jltCredit : ENJournalLineType.jltDebit);
+        //}
 
 
         //public void DailyJournalAdd(Dictionary<string, List<Journal>> data, List<QbPrice> previousPrices)
