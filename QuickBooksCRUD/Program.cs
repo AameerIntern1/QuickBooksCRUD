@@ -124,6 +124,7 @@ namespace QuickBooksCRUD
                             }
                             Console.WriteLine("------------------------------------------------------------------------------------------");
                         }
+                        //quickBooks.DoJournalEntryAdd(queueData, accountList);
                         quickBooks.DailyJournalAdd(queueData, accountList);
                         //var list = quickBooks.GetInvoices1(queueData);
                         //foreach (var mod in list)

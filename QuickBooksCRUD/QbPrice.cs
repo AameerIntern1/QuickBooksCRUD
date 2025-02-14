@@ -20,3 +20,9 @@ namespace QuickBooksCRUD
         public DateTime? TxnDate { get; set; }
     }
 }
+
+
+
+
+
+
