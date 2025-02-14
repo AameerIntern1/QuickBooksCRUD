@@ -665,23 +665,21 @@ namespace QuickBooksCRUD
                 Stopwatch totalStopwatch = new Stopwatch();
                 totalStopwatch.Start();
 
+
                 foreach (var journal in queueData)
                 {
 
-                    foreach (var data in journal.Value)
+                    foreach (var qbData in previousPrices)
                     {
-                        foreach (var getdata in previousPrices)
+                        if (journal.Key == qbData.Key)
                         {
-                            if (getdata.Key == journal.Key)
+                            Console.WriteLine($"-==-=-=-=-=-=-=-=-=-=-=-     {journal.Key}     -==-=-=-=-=-=-=-=-=-=-=-");
+                            foreach (var mod in qbData.Value)
                             {
-                                // Prepare and process the request
-                                foreach (var mod in getdata.Value)
+                                foreach (var item in journal.Value)
                                 {
-                                    if (mod == null) continue;
-
                                     string? accountName = !string.IsNullOrEmpty(mod.CreditAccount) ? mod.CreditAccount : mod.DebitAccount;
-                                    string? account = accountName.Contains(":") ? accountName.Split(':').Last().Replace(" ", "") : accountName.Replace(" ", "");
-
+                                    //string? account = accountName.Contains(":") ? accountName.Split(':').Last().Replace(" ", "") : accountName.Replace(" ", "");
 
                                     IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
                                     journalModRq.TxnID.SetValue(mod.TaxId);
@@ -691,56 +689,142 @@ namespace QuickBooksCRUD
                                     string? txnLineId = !string.IsNullOrEmpty(mod.CreditTxnLineId) ? mod.CreditTxnLineId : mod.DebitTxnLineId;
                                     if (!string.IsNullOrEmpty(txnLineId))
                                     {
+                                        Console.WriteLine("\n\n\n");
                                         Console.WriteLine($"Modifying account {accountName}");
+                                        Console.WriteLine("\n");
 
-                                        if (accountName == "Accounts Receivable" || accountName == "Checking")
+                                        if (accountName == "Accounts Receivable")
                                         {
-                                            AddARCashJournalLine(journalModRq, accountName, Convert.ToDouble(data.AccountReceivable), mod);
+                                            AddARCashJournalLine(journalModRq, accountName, Convert.ToDouble(item.AccountReceivable), mod);
+                                        }
+                                        else if (accountName == "Cash")
+                                        {
+                                            AddARCashJournalLine(journalModRq, accountName, Convert.ToDouble(item.Cash), mod);
+                                        }
+                                        else if (accountName == "Liability")
+                                        {
+                                            AddAccountJournalLine(journalModRq, accountName, Convert.ToDouble(item.UnEarnedAmount), mod);
+
                                         }
                                         else
                                         {
-                                            AddAccountJournalLine(journalModRq, accountName, Convert.ToDouble(data.EarnedAmount), mod);
+                                            AddAccountJournalLine(journalModRq, accountName, Convert.ToDouble(item.EarnedAmount), mod);
                                         }
                                     }
-
                                 }
+
                             }
-                 
+                            Stopwatch stopwatch = new Stopwatch();
+                            stopwatch.Start();
+
+                            IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
+                            stopwatch.Stop();
+
+                            Console.WriteLine($"Time before adding journal entries in QuickBooks: {stopwatch.ElapsedMilliseconds} ms");
+
+                            int successCount = 0, failureCount = 0;
+                            if (responseMsgSet?.ResponseList != null)
+                            {
+                                IResponseList responseList = responseMsgSet.ResponseList;
+                                for (int i = 0; i < responseList.Count; i++)
+                                {
+                                    IResponse response = responseList.GetAt(i);
+
+                                    if (response.StatusCode == 0)
+                                        successCount++;
+                                    else
+                                    {
+                                        failureCount++;
+                                        Console.WriteLine($"Error occurred: {response.StatusMessage}");
+                                        Console.WriteLine($"Error Code: {response.StatusCode}");
+                                    }
+                                }
+                                Console.WriteLine($"{successCount} Journal Entries added successfully.");
+                                Console.WriteLine($"Failed Journal Entries: {failureCount}");
+                            }
+
+                            Console.WriteLine($"Total processing time: {totalStopwatch.ElapsedMilliseconds} ms");
+                            Console.WriteLine("\n\n\n\n\n");
+
                         }
                     }
                 }
+                //foreach (var journal in queueData)
+                //{
+
+                //    foreach (var data in journal.Value)
+                //    {
+                //        foreach (var getdata in previousPrices)
+                //        {
+                //            if (getdata.Key == journal.Key)
+                //            {
+                //                // Prepare and process the request
+                //                foreach (var mod in getdata.Value)
+                //                {
+                //                    if (mod == null) continue;
+
+                //                    string? accountName = !string.IsNullOrEmpty(mod.CreditAccount) ? mod.CreditAccount : mod.DebitAccount;
+                //                    string? account = accountName.Contains(":") ? accountName.Split(':').Last().Replace(" ", "") : accountName.Replace(" ", "");
+
+
+                //                    IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
+                //                    journalModRq.TxnID.SetValue(mod.TaxId);
+                //                    journalModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
+                //                    journalModRq.EditSequence.SetValue(mod.EditSequenceID);
+
+                //                    string? txnLineId = !string.IsNullOrEmpty(mod.CreditTxnLineId) ? mod.CreditTxnLineId : mod.DebitTxnLineId;
+                //                    if (!string.IsNullOrEmpty(txnLineId))
+                //                    {
+                //                        Console.WriteLine($"Modifying account {accountName}");
+
+                //                        if (accountName == "Accounts Receivable" || accountName == "Checking")
+                //                        {
+                //                            AddARCashJournalLine(journalModRq, accountName, Convert.ToDouble(data.AccountReceivable), mod);
+                //                        }
+                //                        else
+                //                        {
+                //                            AddAccountJournalLine(journalModRq, accountName, Convert.ToDouble(data.EarnedAmount), mod);
+                //                        }
+                //                    }
+
+                //                }
+                //            }
+
+                //        }
+                //    }
+                //}
 
                 // Send the request
-                Stopwatch stopwatch = new Stopwatch();
-                stopwatch.Start();
+                //Stopwatch stopwatch = new Stopwatch();
+                //stopwatch.Start();
 
-                IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
-                stopwatch.Stop();
+                //IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
+                //stopwatch.Stop();
 
-                Console.WriteLine($"Time before adding journal entries in QuickBooks: {stopwatch.ElapsedMilliseconds} ms");
+                //Console.WriteLine($"Time before adding journal entries in QuickBooks: {stopwatch.ElapsedMilliseconds} ms");
 
-                int successCount = 0, failureCount = 0;
-                if (responseMsgSet?.ResponseList != null)
-                {
-                    IResponseList responseList = responseMsgSet.ResponseList;
-                    for (int i = 0; i < responseList.Count; i++)
-                    {
-                        IResponse response = responseList.GetAt(i);
+                //int successCount = 0, failureCount = 0;
+                //if (responseMsgSet?.ResponseList != null)
+                //{
+                //    IResponseList responseList = responseMsgSet.ResponseList;
+                //    for (int i = 0; i < responseList.Count; i++)
+                //    {
+                //        IResponse response = responseList.GetAt(i);
 
-                        if (response.StatusCode == 0)
-                            successCount++;
-                        else
-                        {
-                            failureCount++;
-                            Console.WriteLine($"Error occurred: {response.StatusMessage}");
-                            Console.WriteLine($"Error Code: {response.StatusCode}");
-                        }
-                    }
-                    Console.WriteLine($"{successCount} Journal Entries added successfully.");
-                    Console.WriteLine($"Failed Journal Entries: {failureCount}");
-                }
+                //        if (response.StatusCode == 0)
+                //            successCount++;
+                //        else
+                //        {
+                //            failureCount++;
+                //            Console.WriteLine($"Error occurred: {response.StatusMessage}");
+                //            Console.WriteLine($"Error Code: {response.StatusCode}");
+                //        }
+                //    }
+                //    Console.WriteLine($"{successCount} Journal Entries added successfully.");
+                //    Console.WriteLine($"Failed Journal Entries: {failureCount}");
+                //}
 
-                Console.WriteLine($"Total processing time: {totalStopwatch.ElapsedMilliseconds} ms");
+                //Console.WriteLine($"Total processing time: {totalStopwatch.ElapsedMilliseconds} ms");
             }
             catch (Exception e)
             {
