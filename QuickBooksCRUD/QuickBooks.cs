@@ -16,11 +16,12 @@ using Newtonsoft.Json.Linq;
 using QuickBooksCRUD;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.Security.Principal;
+using System.Xml.Linq;
 namespace QuickBooksCRUD
 {
     public class QuickBooks
     {
-        public Dictionary<string, List<QbPrice>> GetJournal()
+        public Dictionary<string, List<QbPrice>> GetJournal(Dictionary<string, List<Journal>> queueData)
         {
             QBSessionManager sessionManager = new QBSessionManager();
             Dictionary<string, List<QbPrice>> journalToPrices = new Dictionary<string, List<QbPrice>>();
@@ -33,8 +34,9 @@ namespace QuickBooksCRUD
                 IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
                 requestSet.Attributes.OnError = ENRqOnError.roeContinue;
                 IJournalEntryQuery journalEntryQuery = requestSet.AppendJournalEntryQueryRq();
-                journalEntryQuery.ORTxnQuery.TxnFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.FromTxnDate.SetValue(DateTime.Parse("02/12/2025"));
-                journalEntryQuery.ORTxnQuery.TxnFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.ToTxnDate.SetValue(DateTime.Parse("02/12/2025"));
+                journalEntryQuery.ORTxnQuery.TxnFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.FromTxnDate.SetValue(DateTime.Now.AddDays(-1).Date);
+                journalEntryQuery.ORTxnQuery.TxnFilter.ORDateRangeFilter.TxnDateRangeFilter.ORTxnDateRangeFilter.TxnDateFilter.ToTxnDate.SetValue(DateTime.Now.AddDays(-1).Date);
+
                 journalEntryQuery.IncludeLineItems.SetValue(true);
 
                 IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
@@ -45,13 +47,12 @@ namespace QuickBooksCRUD
                 if (response.StatusCode == 0 && response.Detail != null)
                 {
                     IJournalEntryRetList journalList = (IJournalEntryRetList)response.Detail;
-                    Console.WriteLine($"Invoices in QuickBooks {journalList.Count}:");
+                    Console.WriteLine($"Jouranl in QuickBooks {journalList.Count}:");
                     int count = 0;
 
                     for (int i = 0; i < journalList.Count; i++)
                     {
                         IJournalEntryRet journal = journalList.GetAt(i);
-                        Console.WriteLine($"Processing Invoice ID: {journal.RefNumber.GetValue()}");
 
                         string? memo = journal.Memo != null ? Convert.ToString(journal.Memo.GetValue()) : null;
 
@@ -98,11 +99,13 @@ namespace QuickBooksCRUD
 
                                     debitTxnLineId = lineItem.JournalDebitLine.TxnLineID.GetValue();
                                 }
-
+                                accountForKey = !string.IsNullOrEmpty(creditAccount) ? creditAccount : debitAccount;
+                                //accountForKey = accountForKey.Contains(":") ? accountForKey.Split(':').Last().Replace(" ", "") : accountForKey.Replace(" ", "");
                                 // Set the key account for the first line item
-                                if (j == 0)
+                                //accountForKey = !string.IsNullOrEmpty(creditAccount) ? creditAccount : debitAccount;
+                                if (accountForKey.Contains(":"))
                                 {
-                                    accountForKey = !string.IsNullOrEmpty(creditAccount) ? creditAccount : debitAccount;
+                                   
                                     accountForKey = accountForKey.Contains(":") ? accountForKey.Split(':').Last().Replace(" ", "") : accountForKey.Replace(" ", "");
                                 }
 
@@ -147,7 +150,8 @@ namespace QuickBooksCRUD
                 }
                 else
                 {
-                    Console.WriteLine("No invoices found or error: " + response.StatusMessage);
+                    Console.WriteLine("No Journal found or error: " + response.StatusMessage);
+                    AddNewJournal(queueData, requestSet, sessionManager);
                 }
             }
             catch (Exception ex)
@@ -162,6 +166,141 @@ namespace QuickBooksCRUD
 
             return journalToPrices;
         }
+        private void AddNewJournal(Dictionary<string, List<Journal>> queueData, IMsgSetRequest requestMsgSet, QBSessionManager sessionManager)
+        {
+            foreach (var journal in queueData)
+            {
+
+                Console.WriteLine($"-==-=-=-=-=-=-=-=-=-=-=-  {journal.Key}  -==-=-=-=-=-=-=-=-=-=-=-");
+
+                Account account = GetNewAccountFromQB(journal.Key, sessionManager);
+                if (account != null)
+                {
+
+                    foreach (var item in journal.Value)
+                    {
+                        IJournalEntryAdd JournalEntryAddRq = requestMsgSet.AppendJournalEntryAddRq();
+                        JournalEntryAddRq.TxnDate.SetValue(DateTime.UtcNow.AddDays(-1).Date);
+                        if (item != null && !string.IsNullOrEmpty(account.AccountLiability) && !string.IsNullOrEmpty(account.AccountName))
+                        {
+                            Console.WriteLine($"\nModifying account {account.AccountName}\n");
+                            // Ensure each line is added separately
+                            AddNewAccountJournalLine(JournalEntryAddRq, account.AccountName, Convert.ToDouble(item.EarnedAmount));
+                            AddNewAccountJournalLine(JournalEntryAddRq, account.AccountLiability, Convert.ToDouble(item.UnEarnedAmount));
+                            AddNewARCashJournalLine(JournalEntryAddRq, "Accounts Receivable", Convert.ToDouble(item.AccountReceivable));
+                            AddNewARCashJournalLine(JournalEntryAddRq, "Cash", Convert.ToDouble(item.Cash));
+                        }
+                    }
+
+                }
+
+             
+
+                
+            }
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
+            stopwatch.Stop();
+
+            Console.WriteLine($"Time before adding journal entries in QuickBooks: {stopwatch.ElapsedMilliseconds} ms");
+
+            int successCount = 0, failureCount = 0;
+            if (responseMsgSet?.ResponseList != null)
+            {
+                IResponseList responseList = responseMsgSet.ResponseList;
+                for (int i = 0; i < responseList.Count; i++)
+                {
+                    IResponse response = responseList.GetAt(i);
+
+                    if (response.StatusCode == 0)
+                        successCount++;
+                    else
+                    {
+                        failureCount++;
+                        Console.WriteLine($"Error occurred: {response.StatusMessage}");
+                        Console.WriteLine($"Error Code: {response.StatusCode}");
+                    }
+                }
+                Console.WriteLine($"{successCount} Journal Entries added successfully.");
+                Console.WriteLine($"Failed Journal Entries: {failureCount}");
+            }
+
+
+        }
+
+        public Account GetNewAccountFromQB(string accountName, QBSessionManager sessionManager)
+        {
+            Account addAccount = new Account();
+            try
+            {
+                // Create a new request set
+                IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0);
+                IAccountQuery accountQuery = requestSet.AppendAccountQueryRq();
+
+
+                // Send the request
+                IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
+
+                // Process response
+                IResponse response = responseSet.ResponseList.GetAt(0);
+                if (response.StatusCode == 0 && response.Detail != null)
+                {
+                    IAccountRetList accountList = (IAccountRetList)response.Detail;
+                    string revenueAccount = string.Empty;
+                    string liabilityAccount = string.Empty;
+                    Console.WriteLine("Accounts in QuickBooks:");
+                    for (int i = 0; i < accountList.Count; i++)
+                    {
+                        IAccountRet account = accountList.GetAt(i);
+                        string name = account.FullName.GetValue();
+                        string accountForKey = name;
+
+                        if (accountForKey.Contains(":") && accountForKey.Split(":").Last().Replace(" ", "") == accountName)
+                        {
+
+                            if (accountForKey.Contains(":") && (accountForKey.Split(':')[0] == "Revenue" && accountForKey.Split(':')[1] == "Residential revenue"))
+                            {
+
+                                revenueAccount = name;
+
+                            }
+                            else if (accountForKey.Contains(":") && (accountForKey.Split(':')[0] == "Liability" && accountForKey.Split(':')[1] == "Residential revenue"))
+                            {
+
+                                liabilityAccount = name;
+
+                            }
+                            if (!string.IsNullOrEmpty(revenueAccount) && !string.IsNullOrEmpty(liabilityAccount))
+                            {
+                                addAccount = new Account
+                                {
+                                    AccountName = revenueAccount,
+                                    AccountLiability = liabilityAccount
+                                };
+                                return addAccount;
+                            }
+
+                        }
+
+
+
+                    }
+
+                }
+                else
+                {
+                    Console.WriteLine("No accounts found or error: " + response.StatusMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception: " + ex.Message);
+            }
+            return null;
+        }
+
         public Account GetAccountFromQB(string accountName, IMsgSetRequest requestSet, QBSessionManager sessionManager)
         {
             Account addAccount = new Account();
@@ -177,28 +316,28 @@ namespace QuickBooksCRUD
                 if (response.StatusCode == 0 && response.Detail != null)
                 {
                     IAccountRetList accountList = (IAccountRetList)response.Detail;
-
+                    string revenueAccount = string.Empty;
+                    string liabilityAccount = string.Empty;
                     Console.WriteLine("Accounts in QuickBooks:");
                     for (int i = 0; i < accountList.Count; i++)
                     {
                         IAccountRet account = accountList.GetAt(i);
                         string name = account.FullName.GetValue();
                         string accountForKey = name;
-                        string revenueAccount = string.Empty;
-                        string liabilityAccount = string.Empty;
-                        if (accountForKey.Contains(":") && accountForKey.Split(":").Last() == accountName)
+
+                        if (accountForKey.Contains(":") && accountForKey.Split(":").Last().Replace(" ", "") == accountName)
                         {
 
-                            if (accountForKey.Contains(":") &&  ( accountForKey.Split(':')[0] == "Revenue" &&accountForKey.Split(':')[1] == "Residential revenue"))
+                            if (accountForKey.Contains(":") && (accountForKey.Split(':')[0] == "Revenue" && accountForKey.Split(':')[1] == "Residential revenue"))
                             {
 
-                                revenueAccount = accountForKey.Split(":").Last();
+                                revenueAccount = name;
 
                             }
-                            else if (accountForKey.Contains(":") && accountForKey.Split(':')[0] == "Liability")
+                            else if (accountForKey.Contains(":") && (accountForKey.Split(':')[0] == "Liability" && accountForKey.Split(':')[1] == "Residential revenue"))
                             {
 
-                                liabilityAccount = accountForKey.Split(":").Last();
+                                liabilityAccount = name;
 
                             }
                             if (!string.IsNullOrEmpty(revenueAccount) && !string.IsNullOrEmpty(liabilityAccount))
@@ -236,106 +375,6 @@ namespace QuickBooksCRUD
             //    sessionManager.CloseConnection();
             //}
         }
-        //public Dictionary<string, List<Account>> GetAccount1()
-        //{
-        //    Dictionary<string, List<Account>> addAccount = new Dictionary<string, List<Account>>();
-        //    QBSessionManager sessionManager = new QBSessionManager();
-
-        //    try
-        //    {
-        //        // Step 1: Open QuickBooks Session
-        //        sessionManager.OpenConnection("", "QuickBooks Account Fetcher");
-        //        sessionManager.BeginSession("", ENOpenMode.omDontCare);
-
-        //        // Step 2: Create Request
-        //        IMsgSetRequest requestSet = sessionManager.CreateMsgSetRequest("US", 16, 0); // QBSDK 16.0
-        //        requestSet.Attributes.OnError = ENRqOnError.roeContinue;
-
-        //        // Step 3: Append Account Query Request
-        //        IAccountQuery accountQuery = requestSet.AppendAccountQueryRq();
-
-        //        // Step 4: Send Request to QuickBooks
-        //        IMsgSetResponse responseSet = sessionManager.DoRequests(requestSet);
-
-        //        // Step 5: Process Response
-        //        IResponse response = responseSet.ResponseList.GetAt(0);
-        //        if (response.StatusCode == 0 && response.Detail != null)
-        //        {
-        //            IAccountRetList accountList = (IAccountRetList)response.Detail;
-
-        //            Console.WriteLine("Accounts in QuickBooks:");
-        //            for (int i = 0; i < accountList.Count; i++)
-        //            {
-        //                IAccountRet account = accountList.GetAt(i);
-        //                string name = account.FullName.GetValue();
-        //                string accountForKey = name;
-        //                if (accountForKey.Contains(":") && accountForKey.Split(':')[1] == "Residential revenue")
-        //                {
-        //                    accountForKey = accountForKey.Split(':').Last().Replace(" ", "");
-        //                }
-
-        //                string? type = Convert.ToString(account.AccountType.GetValue());
-        //                string listID = account.ListID != null ? account.ListID.GetValue() : "N/A";
-
-        //                Console.WriteLine($"{name} | List ID: {listID} |  type:{type} ");
-        //                Account accountListData = new Account
-        //                {
-        //                    AccountName = name,
-        //                    AccountType = type
-        //                };
-
-        //                // Add the QbPrice to the dictionary under the first found account
-        //                if (!addAccount.ContainsKey(accountForKey))
-        //                {
-        //                    addAccount[accountForKey] = new List<Account>();
-        //                }
-        //                addAccount[accountForKey].Add(accountListData);
-        //            }
-
-        //        }
-        //        else
-        //        {
-        //            Console.WriteLine("No accounts found or error: " + response.StatusMessage);
-        //        }
-        //        return addAccount;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine("Exception: " + ex.Message);
-        //        return null;
-        //    }
-        //    finally
-        //    {
-        //        sessionManager.EndSession();
-        //        sessionManager.CloseConnection();
-        //    }
-        //}
-
-        //private void AddJournalLine(IJournalEntryAdd JournalEntryAddRq, string accountName, double amount, QbPrice mod)
-        //{
-
-        //    double finalAmount = 0.00;
-        //    string txnLine = string.Empty;
-        //    if (mod.DebitPrice != 0 && !string.IsNullOrEmpty(mod.DebitTxnLineId))
-        //    {
-        //        finalAmount = amount - Convert.ToDouble(mod.DebitPrice);
-
-        //        txnLine = mod.DebitTxnLineId;
-        //    }
-        //    if (mod.CreditPrice != 0 && !string.IsNullOrEmpty(mod.CreditTxnLineId))
-        //    {
-        //        finalAmount = amount - Convert.ToDouble(mod.CreditPrice);
-        //        txnLine = mod.CreditTxnLineId;
-
-        //    }
-        //    IJournalLineMod line = journalModRq.JournalLineModList.Append();
-        //    line.AccountRef.FullName.SetValue(accountName);
-        //    line.TxnLineID.SetValue(txnLine);
-        //    Console.WriteLine($"\n\n\n\n Account Type{line.AccountRef.Type.GetValue()}\n\n\n\n\n");
-        //    line.Amount.SetValue(Math.Round(Math.Abs(finalAmount), 2));
-        //    line.JournalLineType.SetValue(finalAmount > 0 ? ENJournalLineType.jltCredit : ENJournalLineType.jltDebit);
-
-        //}
         private void AddAccountJournalLine(IORJournalLine ORJournalLineListElement, string accountName, double amount, QbPrice mod)
         {
 
@@ -427,6 +466,64 @@ namespace QuickBooksCRUD
 
 
         }
+        private void AddNewAccountJournalLine(IJournalEntryAdd JournalEntryAddRq, string accountName, double amount)
+        {
+            IORJournalLine ORJournalLineListElement = JournalEntryAddRq.ORJournalLineList.Append();
+
+            if (amount < 0)
+            {
+
+
+                ORJournalLineListElement.JournalDebitLine.AccountRef.FullName.SetValue(accountName);
+                ORJournalLineListElement.JournalDebitLine.Amount.SetValue(Math.Round(Math.Abs(amount), 2));
+
+            }
+            else
+            {
+
+
+                ORJournalLineListElement.JournalCreditLine.AccountRef.FullName.SetValue(accountName);
+                ORJournalLineListElement.JournalCreditLine.Amount.SetValue(Math.Round(Math.Abs(amount), 2));
+
+
+            }
+
+        }
+        private void AddNewARCashJournalLine(IJournalEntryAdd JournalEntryAddRq, string accountName, double amount)
+        {
+            IORJournalLine ORJournalLineListElement = JournalEntryAddRq.ORJournalLineList.Append();
+
+            if (amount > 0)
+            {
+
+
+
+                ORJournalLineListElement.JournalDebitLine.AccountRef.FullName.SetValue(accountName);
+                ORJournalLineListElement.JournalDebitLine.Amount.SetValue(Math.Round(Math.Abs(amount), 2));
+
+                if (accountName == "Accounts Receivable")
+                {
+                    ORJournalLineListElement.JournalDebitLine.EntityRef.FullName.SetValue("Test");
+
+                }
+
+            }
+            else
+            {
+
+
+                ORJournalLineListElement.JournalCreditLine.AccountRef.FullName.SetValue(accountName);
+                ORJournalLineListElement.JournalCreditLine.Amount.SetValue(Math.Round(Math.Abs(amount), 2));
+
+                if (accountName == "Accounts Receivable")
+                {
+                    ORJournalLineListElement.JournalCreditLine.EntityRef.FullName.SetValue("Test");
+                }
+
+            }
+
+
+        }
 
         public void DailyJournalAdd(Dictionary<string, List<Journal>> queueData, Dictionary<string, List<QbPrice>> previousPrices)
         {
@@ -448,7 +545,6 @@ namespace QuickBooksCRUD
 
                 Stopwatch totalStopwatch = new Stopwatch();
                 totalStopwatch.Start();
-
 
                 foreach (var journal in queueData)
                 {
@@ -531,94 +627,149 @@ namespace QuickBooksCRUD
                             Console.WriteLine("\n\n\n\n\n");
 
                         }
-                        else
-                        {
-                            Account accountName = GetAccountFromQB(journal.Key, requestMsgSet, sessionManager);
-
-
-
-                            Console.WriteLine(accountName.AccountName, accountName.AccountLiability);
-
-
-                        }
+                  
                     }
                 }
+                //// Convert previousPrices into a Dictionary for quick lookup (ignoring case if needed)
+                //var previousPricesDict = previousPrices.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
+
                 //foreach (var journal in queueData)
                 //{
-
-                //    foreach (var data in journal.Value)
+                //    IJournalEntryAdd JournalEntryAddRq = requestMsgSet.AppendJournalEntryAddRq();
+                //    JournalEntryAddRq.TxnDate.SetValue(DateTime.UtcNow);
+                //    // Check if journal.Key exists in previousPricesDict
+                //    if (previousPricesDict.TryGetValue(journal.Key, out var qbDataList))
                 //    {
-                //        foreach (var getdata in previousPrices)
+                //        Console.WriteLine($"-==-=-=-=-=-=-=-=-=-=-=-  Journal Exists  -==-=-=-=-=-=-=-=-=-=-=-");
+
+
+
+                //        Console.WriteLine($"-==-=-=-=-=-=-=-=-=-=-=-     {journal.Key}     -==-=-=-=-=-=-=-=-=-=-=-");
+
+                //        foreach (var mod in qbDataList)  // Directly access the matched data
                 //        {
-                //            if (getdata.Key == journal.Key)
+                //            foreach (var item in journal.Value)
                 //            {
-                //                // Prepare and process the request
-                //                foreach (var mod in getdata.Value)
+                //                string? accountName = !string.IsNullOrEmpty(mod.CreditAccount) ? mod.CreditAccount : mod.DebitAccount;
+                //                string? txnLineId = !string.IsNullOrEmpty(mod.CreditTxnLineId) ? mod.CreditTxnLineId : mod.DebitTxnLineId;
+
+                //                if (!string.IsNullOrEmpty(txnLineId))
                 //                {
-                //                    if (mod == null) continue;
+                //                    Console.WriteLine($"\nModifying account {accountName}\n");
+                //                    IORJournalLine ORJournalLineListElement = JournalEntryAddRq.ORJournalLineList.Append();
 
-                //                    string? accountName = !string.IsNullOrEmpty(mod.CreditAccount) ? mod.CreditAccount : mod.DebitAccount;
-                //                    string? account = accountName.Contains(":") ? accountName.Split(':').Last().Replace(" ", "") : accountName.Replace(" ", "");
-
-
-                //                    IJournalEntryMod journalModRq = requestMsgSet.AppendJournalEntryModRq();
-                //                    journalModRq.TxnID.SetValue(mod.TaxId);
-                //                    journalModRq.TxnDate.SetValue(Convert.ToDateTime(mod.TxnDate));
-                //                    journalModRq.EditSequence.SetValue(mod.EditSequenceID);
-
-                //                    string? txnLineId = !string.IsNullOrEmpty(mod.CreditTxnLineId) ? mod.CreditTxnLineId : mod.DebitTxnLineId;
-                //                    if (!string.IsNullOrEmpty(txnLineId))
+                //                    // Process each account type correctly
+                //                    if (accountName == "Accounts Receivable")
                 //                    {
-                //                        Console.WriteLine($"Modifying account {accountName}");
-
-                //                        if (accountName == "Accounts Receivable" || accountName == "Checking")
-                //                        {
-                //                            AddARCashJournalLine(journalModRq, accountName, Convert.ToDouble(data.AccountReceivable), mod);
-                //                        }
-                //                        else
-                //                        {
-                //                            AddAccountJournalLine(journalModRq, accountName, Convert.ToDouble(data.EarnedAmount), mod);
-                //                        }
+                //                        AddARCashJournalLine(ORJournalLineListElement, accountName, Convert.ToDouble(item.AccountReceivable), mod);
                 //                    }
-
+                //                    else if (accountName == "Cash")
+                //                    {
+                //                        AddARCashJournalLine(ORJournalLineListElement, accountName, Convert.ToDouble(item.Cash), mod);
+                //                    }
+                //                    else if (accountName == "Liability")
+                //                    {
+                //                        AddAccountJournalLine(ORJournalLineListElement, accountName, Convert.ToDouble(item.UnEarnedAmount), mod);
+                //                    }
+                //                    else
+                //                    {
+                //                        AddAccountJournalLine(ORJournalLineListElement, accountName, Convert.ToDouble(item.EarnedAmount), mod);
+                //                    }
                 //                }
                 //            }
-
                 //        }
-                //    }
-                //}
 
-                // Send the request
-                //Stopwatch stopwatch = new Stopwatch();
-                //stopwatch.Start();
+                //        // Send request to QuickBooks
+                //        Stopwatch stopwatch = new Stopwatch();
+                //        stopwatch.Start();
 
-                //IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
-                //stopwatch.Stop();
+                //        IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
+                //        stopwatch.Stop();
 
-                //Console.WriteLine($"Time before adding journal entries in QuickBooks: {stopwatch.ElapsedMilliseconds} ms");
-
-                //int successCount = 0, failureCount = 0;
-                //if (responseMsgSet?.ResponseList != null)
-                //{
-                //    IResponseList responseList = responseMsgSet.ResponseList;
-                //    for (int i = 0; i < responseList.Count; i++)
-                //    {
-                //        IResponse response = responseList.GetAt(i);
-
-                //        if (response.StatusCode == 0)
-                //            successCount++;
-                //        else
+                //        int successCount = 0, failureCount = 0;
+                //        if (responseMsgSet?.ResponseList != null)
                 //        {
-                //            failureCount++;
-                //            Console.WriteLine($"Error occurred: {response.StatusMessage}");
-                //            Console.WriteLine($"Error Code: {response.StatusCode}");
+                //            IResponseList responseList = responseMsgSet.ResponseList;
+                //            for (int i = 0; i < responseList.Count; i++)
+                //            {
+                //                IResponse response = responseList.GetAt(i);
+
+                //                if (response.StatusCode == 0)
+                //                    successCount++;
+                //                else
+                //                {
+                //                    failureCount++;
+                //                    Console.WriteLine($"Error occurred: {response.StatusMessage}");
+                //                }
+                //            }
+                //            Console.WriteLine($"{successCount} Journal Entries added successfully.");
+                //            Console.WriteLine($"Failed Journal Entries: {failureCount}");
                 //        }
                 //    }
-                //    Console.WriteLine($"{successCount} Journal Entries added successfully.");
-                //    Console.WriteLine($"Failed Journal Entries: {failureCount}");
                 //}
 
-                //Console.WriteLine($"Total processing time: {totalStopwatch.ElapsedMilliseconds} ms");
+
+                foreach (var journal in queueData)
+                {
+                    // Check if journal.Key exists in previousPrices.Keys (ignoring case)
+                    if (!previousPrices.Keys.Any(key => key.Equals(journal.Key, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        Console.WriteLine($"-==-=-=-=-=-=-=-=-=-=-=-  Journal does not exist before, so adding a new journal  -==-=-=-=-=-=-=-=-=-=-=-");
+
+                        Account account = GetAccountFromQB(journal.Key, requestMsgSet, sessionManager);
+
+                        IJournalEntryAdd JournalEntryAddRq = requestMsgSet.AppendJournalEntryAddRq();
+                        JournalEntryAddRq.TxnDate.SetValue(DateTime.UtcNow);
+                        Console.WriteLine($"-==-=-=-=-=-=-=-=-=-=-=-     {journal.Key}     -==-=-=-=-=-=-=-=-=-=-=-");
+                        if (account != null)
+                        {
+                            foreach (var item in journal.Value)
+                            {
+                                Console.WriteLine($"\nModifying account {account.AccountName}\n");
+
+                                if (item != null && !string.IsNullOrEmpty(account.AccountLiability) && !string.IsNullOrEmpty(account.AccountName))
+                                { 
+                                    AddNewARCashJournalLine(JournalEntryAddRq, "Accounts Receivable", Convert.ToDouble(item.AccountReceivable));
+                                    AddNewARCashJournalLine(JournalEntryAddRq, "Cash", Convert.ToDouble(item.Cash));
+                                    AddNewAccountJournalLine(JournalEntryAddRq, account.AccountLiability, Convert.ToDouble(item.UnEarnedAmount));
+                                    AddNewAccountJournalLine(JournalEntryAddRq, account.AccountName, Convert.ToDouble(item.EarnedAmount));
+                                }
+                            }
+                        }
+                        Stopwatch stopwatch = new Stopwatch();
+                        stopwatch.Start();
+
+                        IMsgSetResponse responseMsgSet = sessionManager.DoRequests(requestMsgSet);
+                        stopwatch.Stop();
+
+                        Console.WriteLine($"Time before adding journal entries in QuickBooks: {stopwatch.ElapsedMilliseconds} ms");
+
+                        int successCount = 0, failureCount = 0;
+                        if (responseMsgSet?.ResponseList != null)
+                        {
+                            IResponseList responseList = responseMsgSet.ResponseList;
+                            for (int i = 0; i < responseList.Count; i++)
+                            {
+                                IResponse response = responseList.GetAt(i);
+
+                                if (response.StatusCode == 0)
+                                    successCount++;
+                                else
+                                {
+                                    failureCount++;
+                                    Console.WriteLine($"Error occurred: {response.StatusMessage}");
+                                    Console.WriteLine($"Error Code: {response.StatusCode}");
+                                }
+                            }
+                            Console.WriteLine($"{successCount} Journal Entries added successfully.");
+                            Console.WriteLine($"Failed Journal Entries: {failureCount}");
+                        }
+
+                        Console.WriteLine($"Total processing time: {totalStopwatch.ElapsedMilliseconds} ms");
+                        Console.WriteLine("\n\n\n\n\n");
+                    }
+                }
+
             }
             catch (Exception e)
             {
@@ -630,8 +781,6 @@ namespace QuickBooksCRUD
                 if (connectionOpen) sessionManager?.CloseConnection();
             }
         }
-
-
 
 
 
